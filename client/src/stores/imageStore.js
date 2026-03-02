@@ -64,7 +64,18 @@ export const useImageStore = defineStore('image', () => {
       await fetchHistory()
       clearFiles()
     } catch (err) {
-      errorMessage.value = err.response?.data?.message || 'Lỗi xử lý ảnh, thử lại!'
+       // Parse lỗi từ Blob response về JSON
+        let message = 'Lỗi xử lý ảnh, thử lại!'
+        if (err.response?.data instanceof Blob) {
+            try {
+            const text = await err.response.data.text()
+            const json = JSON.parse(text)
+            message = json.message || message
+            } catch {}
+        } else {
+            message = err.response?.data?.message || message
+        }
+        errorMessage.value = message
     } finally {
       isProcessing.value = false
     }
