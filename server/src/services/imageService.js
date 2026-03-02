@@ -68,20 +68,20 @@ const processImage = async (inputPath, outputPath, scalePercent = 50) => {
   //    Xuất đúng format gốc, quality cao để không mất thêm
   let pipeline = sharp(degradedBuffer)
     .composite(compositeOptions)
-    .withMetadata({ density: 72 }); // giảm DPI xuống 72
+    .withMetadata({ density: 60 }); // giảm DPI xuống 60
 
   switch (format) {
     case 'jpeg':
-      pipeline = pipeline.jpeg({ quality: 92, mozjpeg: true });
+      pipeline = pipeline.jpeg({ quality: 100, mozjpeg: true });
       break;
     case 'png':
       pipeline = pipeline.png({ compressionLevel: 6, colours: 256 }); // giảm bit-depth
       break;
     case 'webp':
-      pipeline = pipeline.webp({ quality: 92 });
+      pipeline = pipeline.webp({ quality: 100  });
       break;
     default:
-      pipeline = pipeline.jpeg({ quality: 92 });
+      pipeline = pipeline.jpeg({ quality: 100 });
   }
 
   const info = await pipeline.toFile(outputPath);
