@@ -1,42 +1,19 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
-require('dotenv').config();
+const bodyParser = require('body-parser');
 
-const imageRoutes = require('./routes/imageRoutes');
-const errorHandler = require('./middleware/errorHandler');
 
-const app = express();
-
-// Middleware
+const port = process.env.PORT || 3000;
+const app = express()
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(bodyParser.urlencoded({extended: true}));
+app.use(bodyParser.json());
 
-// Static files
-app.use('/uploads', express.static(path.join(__dirname, './public/uploads')));
-
-// Routes
-app.use('/api/images', imageRoutes);
-
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Server is running' });
-});
-
-// 404 handler
+routes(app);
+app.listen(port);
 app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'Route not found'
-  });
+    res.status(404).send({url: `${req.originalUrl} not found`});
 });
 
-// Error handler
-app.use(errorHandler);
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
-  console.log(`API: http://localhost:${PORT}/api/images`);
-});
+console.log(`Server started on port ${port}`);
