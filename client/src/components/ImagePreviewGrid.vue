@@ -19,23 +19,26 @@
 
     <!-- Scale control -->
     <div class="scale-control">
-      <label>
-        Giảm resolution xuống còn
+    <label>
+        Mức độ giảm resolution:
         <strong>{{ store.scalePercent }}%</strong>
-        so với ảnh gốc
-      </label>
-      <input
+        <span class="scale-desc">
+        — {{ store.scalePercent <= 25 ? 'Ít mất chi tiết' : store.scalePercent <= 60 ? 'Vừa phải' : 'Mất nhiều chi tiết' }}
+        </span>
+    </label>
+    <input
         type="range"
         min="10"
         max="90"
         step="5"
         v-model.number="store.scalePercent"
-      />
-      <div class="scale-ticks">
-        <span>10%</span><span>50%</span><span>90%</span>
-      </div>
+    />
+    <div class="scale-ticks">
+        <span>10% (ít)</span>
+        <span>50%</span>
+        <span>90% (nhiều)</span>
     </div>
-
+    </div>
     <!-- Error message -->
     <p v-if="store.errorMessage" class="error">⚠️ {{ store.errorMessage }}</p>
 
