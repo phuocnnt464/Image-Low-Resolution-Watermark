@@ -3,7 +3,7 @@ const fs    = require('fs');
 require('dotenv').config();
 
 const WATERMARK_PATH  = process.env.WATERMARK_PATH || './assets/watermark.png';
-const WATERMARK_RATIO = 0.20;  // watermark rộng tối đa 20% chiều rộng ảnh
+const WATERMARK_RATIO = 0.10;  // watermark rộng tối đa 10% chiều rộng ảnh
 const PADDING         = 10;    // px cách mép
 
 /**
@@ -12,7 +12,7 @@ const PADDING         = 10;    // px cách mép
  * @param {string} outputPath
  * @param {number} scalePercent - % kích thước so gốc (1–100)
  */
-const processImage = async (inputPath, outputPath, scalePercent = 50) => {
+const processImage = async (inputPath, outputPath, scalePercent = 60) => {
   // 1. Đọc metadata ảnh gốc
   const meta = await sharp(inputPath).metadata();
   const origW = meta.width;
