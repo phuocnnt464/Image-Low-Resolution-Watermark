@@ -20,9 +20,9 @@ const initDB = async () => {
   `;
   try {
     await pool.query(query);
-    console.log('✅ Table image_processing_history ready');
+    console.log('Table image_processing_history ready');
   } catch (err) {
-    console.error('❌ Failed to init DB:', err);
+    console.error('Failed to init DB:', err);
     throw err;
   }
 };

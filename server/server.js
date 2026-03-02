@@ -5,7 +5,7 @@ const bodyParser = require('body-parser');
 const initDB     = require('./src/config/initDB');
 const imageRoutes = require('./src/routes/imageRoutes');
 
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 3000;
 const app  = express();
 
 app.use(cors());
