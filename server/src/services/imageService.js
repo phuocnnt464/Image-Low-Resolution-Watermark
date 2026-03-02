@@ -50,7 +50,7 @@ const processImage = async (inputPath, outputPath, scalePercent = 60) => {
       top,
     }]);
   } else {
-    console.warn(`⚠️  Watermark không tìm thấy: ${WATERMARK_PATH}`);
+    console.warn(`Watermark không tìm thấy: ${WATERMARK_PATH}`);
   }
 
   // 5. Xuất file
