@@ -3,7 +3,7 @@ const fs    = require('fs');
 require('dotenv').config();
 
 const WATERMARK_PATH  = process.env.WATERMARK_PATH || './assets/watermark.png';
-const WATERMARK_RATIO = 0.10;  // watermark rộng tối đa 10% chiều rộng ảnh
+const WATERMARK_RATIO = 0.20;  // watermark rộng tối đa 20% chiều rộng ảnh
 const PADDING         = 10;    // px cách mép
 
 /**
