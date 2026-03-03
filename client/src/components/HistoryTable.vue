@@ -69,7 +69,7 @@ const formatDate = (dateStr) => {
 }
 
 const statusLabel = (status) => {
-  const map = { pending: '⏳ Đang xử lý', done: '✅ Hoàn thành', failed: '❌ Thất bại' }
+  const map = { pending: '⏳ Đang xử lý', done: '✅ Success', failed: '❌ Failed' }
   return map[status] ?? status
 }
 </script>

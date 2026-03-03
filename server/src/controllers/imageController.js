@@ -7,7 +7,6 @@ const { createZip }    = require('../utils/zipHelper');
 require('dotenv').config();
 
 const UPLOAD_DIR        = process.env.UPLOAD_DIR    || path.resolve(__dirname, '../../public/uploads');
-// ✅ Dùng path.resolve tuyệt đối từ vị trí file, không phụ thuộc CWD
 const DEFAULT_WATERMARK = process.env.WATERMARK_PATH || path.resolve(__dirname, '../../assets/watermark.png');
 
 const cleanupFiles = (paths) => {
@@ -28,14 +27,13 @@ const processImages = async (req, res) => {
   const scalePercent  = Math.min(100, Math.max(1, parseInt(req.body.scalePercent) || 50));
   const inputPaths    = imageFiles.map((f) => f.path);
 
-  // ✅ Log để debug — xem backend có nhận được watermark không
   const hasCustomWatermark = watermarkFiles.length > 0;
   const watermarkPath = hasCustomWatermark
     ? watermarkFiles[0].path
     : DEFAULT_WATERMARK;
 
-  console.log(`📌 watermark: ${hasCustomWatermark ? `custom → ${watermarkFiles[0]?.originalname}` : `default → ${DEFAULT_WATERMARK}`}`);
-  console.log(`📌 default watermark exists: ${fs.existsSync(DEFAULT_WATERMARK)}`);
+  console.log(`watermark: ${hasCustomWatermark ? `custom → ${watermarkFiles[0]?.originalname}` : `default → ${DEFAULT_WATERMARK}`}`);
+  console.log(`default watermark exists: ${fs.existsSync(DEFAULT_WATERMARK)}`);
 
   const processedPaths = [];
 
@@ -74,7 +72,7 @@ const processImages = async (req, res) => {
           status:          'done',
         });
       } catch (imgErr) {
-        console.error(`❌ Lỗi xử lý ${file.originalname}:`, imgErr.message);
+        console.error(`Lỗi xử lý ${file.originalname}:`, imgErr.message);
         await ImageModel.markFailed(id);
       }
     }
@@ -98,7 +96,7 @@ const processImages = async (req, res) => {
       });
     }
   } catch (err) {
-    console.error('❌ processImages error:', err);
+    console.error('processImages error:', err);
     cleanupFiles([...inputPaths, ...watermarkFiles.map(f => f.path)]);
     res.status(500).json({ message: 'Lỗi xử lý ảnh', error: err.message });
   }

@@ -16,13 +16,13 @@ const processImages = async (files, scalePercent = 50, watermarkFile = null) => 
   files.forEach((file) => formData.append('images', file))
   formData.append('scalePercent', scalePercent)
 
-  // ✅ Chỉ append watermark nếu user có upload
+  // Chỉ append watermark nếu user có upload
   if (watermarkFile) {
     formData.append('watermark', watermarkFile)
   }
 
   const response = await apiClient.post('/images/process', formData, {
-    // ✅ Không set Content-Type thủ công — để browser tự set boundary cho multipart
+    // Không set Content-Type thủ công — để browser tự set boundary cho multipart
     responseType: 'blob',
   })
 

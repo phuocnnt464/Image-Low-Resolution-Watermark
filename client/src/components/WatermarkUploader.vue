@@ -72,7 +72,7 @@ const onDrop = (e) => {
   if (file) store.setWatermark(file)
 }
 
-// ✅ Dùng nextTick để đợi DOM render xong trước khi vẽ canvas
+// Dùng nextTick để đợi DOM render xong trước khi vẽ canvas
 const drawPreview = async () => {
   // Đợi Vue cập nhật DOM (v-if render canvas xong)
   await nextTick()
@@ -129,7 +129,7 @@ const drawPreview = async () => {
   ctx.drawImage(wm, left, top, wmW, wmH)
 }
 
-// ✅ KHÔNG dùng immediate: true vì DOM chưa render khi watch chạy lần đầu
+// KHÔNG dùng immediate: true vì DOM chưa render khi watch chạy lần đầu
 // Chỉ vẽ lại khi watermark hoặc ảnh THAY ĐỔI sau khi mount
 watch(
   () => [store.watermarkUrl, store.previewUrls[0]],

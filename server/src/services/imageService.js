@@ -3,7 +3,6 @@ const fs    = require('fs');
 const path  = require('path');
 require('dotenv').config();
 
-// ✅ path.resolve đảm bảo đúng dù server chạy từ thư mục nào
 const DEFAULT_WATERMARK_PATH = process.env.WATERMARK_PATH
   || path.resolve(__dirname, '../../assets/watermark.png');
 
@@ -53,7 +52,7 @@ const processImage = async (inputPath, outputPath, scalePercent = 50, watermarkP
       top:   Math.max(0, origH - wmH - PADDING),
     }];
   } else {
-    console.warn(`⚠️  Watermark không tìm thấy: ${wmPath}`);
+    console.warn(`Watermark không tìm thấy: ${wmPath}`);
   }
 
   let pipeline = sharp(degradedBuffer)

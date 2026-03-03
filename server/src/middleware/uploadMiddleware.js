@@ -34,7 +34,6 @@ const upload = multer({
   },
 });
 
-// upload.fields: nhận 'images' (nhiều) + 'watermark' (1 file, optional)
 const uploadFields = upload.fields([
   { name: 'images',    maxCount: 20 },
   { name: 'watermark', maxCount: 1  },
