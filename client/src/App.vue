@@ -8,6 +8,8 @@
     <main class="app-main">
       <div class="card">
         <ImageUploader />
+        <!-- Watermark uploader nằm trong cùng card với ảnh -->
+        <WatermarkUploader />
         <ImagePreviewGrid />
       </div>
 
@@ -21,9 +23,10 @@
 <script setup>
 import { onMounted } from 'vue'
 import { useImageStore } from './stores/imageStore'
-import ImageUploader from './components/ImageUploader.vue'
-import ImagePreviewGrid from './components/ImagePreviewGrid.vue'
-import HistoryTable from './components/HistoryTable.vue'
+import ImageUploader    from './components/ImageUploader.vue'
+import WatermarkUploader from './components/WatermarkUploader.vue'
+import ImagePreviewGrid  from './components/ImagePreviewGrid.vue'
+import HistoryTable      from './components/HistoryTable.vue'
 
 const store = useImageStore()
 onMounted(() => store.fetchHistory())
@@ -31,14 +34,12 @@ onMounted(() => store.fetchHistory())
 
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: #f1f5f9;
   color: #1e293b;
   min-height: 100vh;
 }
-
 .app-header {
   background: white;
   border-bottom: 1px solid #e2e8f0;
@@ -47,7 +48,6 @@ body {
 }
 .app-header h1 { font-size: 24px; color: #1e293b; margin-bottom: 4px; }
 .app-header p  { color: #64748b; font-size: 14px; }
-
 .app-main {
   max-width: 900px;
   margin: 32px auto;
@@ -56,7 +56,6 @@ body {
   flex-direction: column;
   gap: 24px;
 }
-
 .card {
   background: white;
   border-radius: 12px;

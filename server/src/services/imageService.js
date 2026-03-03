@@ -2,86 +2,65 @@ const sharp = require('sharp');
 const fs    = require('fs');
 require('dotenv').config();
 
-const WATERMARK_PATH  = process.env.WATERMARK_PATH || './assets/watermark.png';
-const WATERMARK_RATIO = 0.15; // watermark rộng tối đa 15% chiều rộng ảnh gốc
-const PADDING         = 10;   // px cách mép
+const DEFAULT_WATERMARK_PATH = process.env.WATERMARK_PATH || './assets/watermark.png';
+const WATERMARK_RATIO        = 0.15;
+const PADDING                = 15;
 
 /**
- * Xử lý ảnh:
- *  - Giữ nguyên dimension (width × height)
- *  - Giữ nguyên format gốc (jpeg/png/webp)
- *  - Giảm resolution bằng downsample → upsample (mất chi tiết pixel)
- *  - Giảm DPI metadata xuống 72
- *  - Watermark luôn sắc nét (render độc lập từ file gốc)
- *
  * @param {string} inputPath
  * @param {string} outputPath
- * @param {number} scalePercent - % downsample (10=ít mất, 90=mất nhiều chi tiết)
+ * @param {number} scalePercent   - % downsample (10=ít mất, 90=mất nhiều)
+ * @param {string} watermarkPath  - đường dẫn watermark (user upload hoặc mặc định)
  */
-const processImage = async (inputPath, outputPath, scalePercent = 50) => {
-  // 1. Đọc metadata ảnh gốc
+const processImage = async (inputPath, outputPath, scalePercent = 50, watermarkPath = null) => {
+  const wmPath = watermarkPath || DEFAULT_WATERMARK_PATH;
+
   const meta   = await sharp(inputPath).metadata();
   const origW  = meta.width;
   const origH  = meta.height;
-  const format = meta.format; // 'jpeg' | 'png' | 'webp'
+  const format = meta.format;
 
-  // 2. Tính kích thước trung gian để downsample
-  //    scalePercent=50 → thu nhỏ còn 50% → upsample lại 100%
-  //    → mất chi tiết pixel nhưng giữ nguyên dimension
+  // Downsample → upsample (giảm resolution, giữ dimension)
   const midW = Math.max(1, Math.round(origW * scalePercent / 100));
   const midH = Math.max(1, Math.round(origH * scalePercent / 100));
 
-  // 3. Downsample → upsample về kích thước gốc
-  //    kernel: nearest = pixel vỡ rõ, cubic = mềm hơn
   const degradedBuffer = await sharp(inputPath)
-    .resize(midW, midH, { kernel: sharp.kernel.nearest })  // thu nhỏ, mất chi tiết
-    .resize(origW, origH, { kernel: sharp.kernel.nearest }) // phóng to lại, giữ pixelate
+    .resize(midW, midH, { kernel: sharp.kernel.nearest })
+    .resize(origW, origH, { kernel: sharp.kernel.nearest })
     .toBuffer();
 
-  // 4. Chuẩn bị watermark SẮC NÉT từ file gốc (hoàn toàn độc lập)
+  // Watermark sắc nét — render hoàn toàn độc lập
   let compositeOptions = [];
 
-  if (fs.existsSync(WATERMARK_PATH)) {
-    const wmMeta  = await sharp(WATERMARK_PATH).metadata();
-
-    // Scale watermark theo kích thước ảnh GỐC
+  if (fs.existsSync(wmPath)) {
+    const wmMeta  = await sharp(wmPath).metadata();
     const wmMaxW  = Math.round(origW * WATERMARK_RATIO);
     const wmScale = Math.min(1, wmMaxW / wmMeta.width);
     const wmW     = Math.max(1, Math.round(wmMeta.width  * wmScale));
     const wmH     = Math.max(1, Math.round(wmMeta.height * wmScale));
 
-    // Render watermark sắc nét — không qua bất kỳ blur/resize nào khác
-    const watermarkBuffer = await sharp(WATERMARK_PATH)
-      .resize(wmW, wmH, { kernel: sharp.kernel.lanczos3 }) // lanczos3: sắc nét nhất
+    const watermarkBuffer = await sharp(wmPath)
+      .resize(wmW, wmH, { kernel: sharp.kernel.lanczos3 })
       .toBuffer();
 
     compositeOptions = [{
       input: watermarkBuffer,
       left:  PADDING,
-      top:   Math.max(0, origH - wmH - PADDING), // góc trái dưới
+      top:   Math.max(0, origH - wmH - PADDING),
     }];
   } else {
-    console.warn(`⚠️ Watermark không tìm thấy: ${WATERMARK_PATH}`);
+    console.warn(`⚠️  Watermark không tìm thấy: ${wmPath}`);
   }
 
-  // 5. Composite watermark vào ảnh đã degrade
-  //    Xuất đúng format gốc, quality cao để không mất thêm
   let pipeline = sharp(degradedBuffer)
     .composite(compositeOptions)
-    .withMetadata({ density: 60 }); // giảm DPI xuống 60
+    .withMetadata({ density: 72 });
 
   switch (format) {
-    case 'jpeg':
-      pipeline = pipeline.jpeg({ quality: 100, mozjpeg: true });
-      break;
-    case 'png':
-      pipeline = pipeline.png({ compressionLevel: 6, colours: 256 }); // giảm bit-depth
-      break;
-    case 'webp':
-      pipeline = pipeline.webp({ quality: 100  });
-      break;
-    default:
-      pipeline = pipeline.jpeg({ quality: 100 });
+    case 'jpeg': pipeline = pipeline.jpeg({ quality: 100, mozjpeg: true }); break;
+    case 'png':  pipeline = pipeline.png({ compressionLevel: 6, colours: 256 }); break;
+    case 'webp': pipeline = pipeline.webp({ quality: 100 }); break;
+    default:     pipeline = pipeline.jpeg({ quality: 100 });
   }
 
   const info = await pipeline.toFile(outputPath);

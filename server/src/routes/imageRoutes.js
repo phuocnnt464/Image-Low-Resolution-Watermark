@@ -1,6 +1,6 @@
 const express = require('express');
 const router  = express.Router();
-const upload  = require('../middleware/uploadMiddleware');
+const { uploadFields } = require('../middleware/uploadMiddleware');
 const {
   processImages,
   getHistory,
@@ -8,7 +8,7 @@ const {
   deleteHistory,
 } = require('../controllers/imageController');
 
-router.post('/process',       upload.array('images', 20), processImages);
+router.post('/process',       uploadFields, processImages);
 router.get('/history',        getHistory);
 router.get('/history/:id',    getHistoryById);
 router.delete('/history/:id', deleteHistory);
