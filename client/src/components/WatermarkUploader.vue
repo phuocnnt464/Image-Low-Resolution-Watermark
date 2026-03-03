@@ -8,7 +8,6 @@
     </div>
 
     <div class="wm-body">
-      <!-- Khu vực upload watermark -->
       <div
         class="wm-drop"
         :class="{ 'wm-drop--drag': isDragging, 'wm-drop--has': !!store.watermarkFile }"
@@ -35,7 +34,6 @@
         </template>
       </div>
 
-      <!-- Nút xóa watermark tùy chỉnh -->
       <button
         v-if="store.watermarkFile"
         class="wm-clear"
@@ -54,12 +52,12 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import { useImageStore } from '../stores/imageStore'
 
-const store     = useImageStore()
-const inputRef  = ref(null)
-const canvasRef = ref(null)
+const store      = useImageStore()
+const inputRef   = ref(null)
+const canvasRef  = ref(null)
 const isDragging = ref(false)
 
 const onFileChange = (e) => {
@@ -74,12 +72,14 @@ const onDrop = (e) => {
   if (file) store.setWatermark(file)
 }
 
-// Vẽ preview bằng Canvas API
+// ✅ Dùng nextTick để đợi DOM render xong trước khi vẽ canvas
 const drawPreview = async () => {
+  // Đợi Vue cập nhật DOM (v-if render canvas xong)
+  await nextTick()
+
   const canvas = canvasRef.value
   if (!canvas) return
 
-  // Cần có ảnh gốc và watermark
   const imgUrl = store.previewUrls[0]
   const wmUrl  = store.watermarkUrl
   if (!imgUrl || !wmUrl) return
@@ -88,14 +88,18 @@ const drawPreview = async () => {
 
   // Load ảnh gốc
   const img = new Image()
+  img.crossOrigin = 'anonymous'
   img.src = imgUrl
-  await new Promise((r) => { img.onload = r })
+  await new Promise((resolve, reject) => {
+    img.onload = resolve
+    img.onerror = reject
+  })
 
-  // Tính kích thước canvas (max 600px rộng để hiển thị)
-  const maxW    = 600
-  const scale   = Math.min(1, maxW / img.naturalWidth)
-  const dispW   = Math.round(img.naturalWidth  * scale)
-  const dispH   = Math.round(img.naturalHeight * scale)
+  // Tính kích thước canvas (max 600px rộng)
+  const maxW  = 600
+  const scale = Math.min(1, maxW / img.naturalWidth)
+  const dispW = Math.round(img.naturalWidth  * scale)
+  const dispH = Math.round(img.naturalHeight * scale)
 
   canvas.width  = dispW
   canvas.height = dispH
@@ -105,8 +109,12 @@ const drawPreview = async () => {
 
   // Load watermark
   const wm = new Image()
+  wm.crossOrigin = 'anonymous'
   wm.src = wmUrl
-  await new Promise((r) => { wm.onload = r })
+  await new Promise((resolve, reject) => {
+    wm.onload = resolve
+    wm.onerror = reject
+  })
 
   // Tính kích thước watermark: 15% chiều rộng canvas
   const wmMaxW  = Math.round(dispW * 0.15)
@@ -114,18 +122,20 @@ const drawPreview = async () => {
   const wmW     = Math.round(wm.naturalWidth  * wmScale)
   const wmH     = Math.round(wm.naturalHeight * wmScale)
 
-  const padding = Math.round(15 * scale)
+  const padding = Math.max(8, Math.round(15 * scale))
   const left    = padding
-  const top     = dispH - wmH - padding
+  const top     = Math.max(0, dispH - wmH - padding)
 
-  ctx.drawImage(wm, left, Math.max(0, top), wmW, wmH)
+  ctx.drawImage(wm, left, top, wmW, wmH)
 }
 
-// Tự động vẽ lại preview khi watermark hoặc ảnh thay đổi
+// ✅ KHÔNG dùng immediate: true vì DOM chưa render khi watch chạy lần đầu
+// Chỉ vẽ lại khi watermark hoặc ảnh THAY ĐỔI sau khi mount
 watch(
   () => [store.watermarkUrl, store.previewUrls[0]],
-  () => { if (store.watermarkUrl && store.previewUrls[0]) drawPreview() },
-  { immediate: true }
+  ([newWmUrl, newImgUrl]) => {
+    if (newWmUrl && newImgUrl) drawPreview()
+  }
 )
 </script>
 
