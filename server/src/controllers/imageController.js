@@ -6,8 +6,9 @@ const { processImage } = require('../services/imageService');
 const { createZip }    = require('../utils/zipHelper');
 require('dotenv').config();
 
-const UPLOAD_DIR         = process.env.UPLOAD_DIR    || './public/uploads';
-const DEFAULT_WATERMARK  = process.env.WATERMARK_PATH || './assets/watermark.png';
+const UPLOAD_DIR        = process.env.UPLOAD_DIR    || path.resolve(__dirname, '../../public/uploads');
+// ✅ Dùng path.resolve tuyệt đối từ vị trí file, không phụ thuộc CWD
+const DEFAULT_WATERMARK = process.env.WATERMARK_PATH || path.resolve(__dirname, '../../assets/watermark.png');
 
 const cleanupFiles = (paths) => {
   paths.forEach((p) => {
@@ -17,8 +18,6 @@ const cleanupFiles = (paths) => {
 
 // ─── POST /api/images/process ────────────────────────────────────────────────
 const processImages = async (req, res) => {
-  // req.files['images']    → mảng ảnh cần xử lý
-  // req.files['watermark'] → mảng 1 phần tử (watermark tùy chỉnh, optional)
   const imageFiles     = req.files?.['images']    || [];
   const watermarkFiles = req.files?.['watermark'] || [];
 
@@ -26,11 +25,17 @@ const processImages = async (req, res) => {
     return res.status(400).json({ message: 'Không có ảnh nào được upload' });
   }
 
-  const scalePercent   = Math.min(100, Math.max(1, parseInt(req.body.scalePercent) || 50));
-  const inputPaths     = imageFiles.map((f) => f.path);
-  const watermarkPath  = watermarkFiles.length > 0
-    ? watermarkFiles[0].path   // dùng watermark user upload
-    : DEFAULT_WATERMARK;       // fallback về mặc định
+  const scalePercent  = Math.min(100, Math.max(1, parseInt(req.body.scalePercent) || 50));
+  const inputPaths    = imageFiles.map((f) => f.path);
+
+  // ✅ Log để debug — xem backend có nhận được watermark không
+  const hasCustomWatermark = watermarkFiles.length > 0;
+  const watermarkPath = hasCustomWatermark
+    ? watermarkFiles[0].path
+    : DEFAULT_WATERMARK;
+
+  console.log(`📌 watermark: ${hasCustomWatermark ? `custom → ${watermarkFiles[0]?.originalname}` : `default → ${DEFAULT_WATERMARK}`}`);
+  console.log(`📌 default watermark exists: ${fs.existsSync(DEFAULT_WATERMARK)}`);
 
   const processedPaths = [];
 
@@ -52,12 +57,11 @@ const processImages = async (req, res) => {
         processedWidth:    null,
         processedHeight:   null,
         scalePercent,
-        watermarkApplied:  true,
+        watermarkApplied:  hasCustomWatermark,
         status:            'pending',
       });
 
       try {
-        // Truyền watermarkPath động vào processImage
         const result = await processImage(file.path, outputPath, scalePercent, watermarkPath);
         processedPaths.push(outputPath);
 

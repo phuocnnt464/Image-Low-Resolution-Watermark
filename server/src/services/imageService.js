@@ -1,10 +1,14 @@
 const sharp = require('sharp');
 const fs    = require('fs');
+const path  = require('path');
 require('dotenv').config();
 
-const DEFAULT_WATERMARK_PATH = process.env.WATERMARK_PATH || './assets/watermark.png';
-const WATERMARK_RATIO        = 0.15;
-const PADDING                = 15;
+// ✅ path.resolve đảm bảo đúng dù server chạy từ thư mục nào
+const DEFAULT_WATERMARK_PATH = process.env.WATERMARK_PATH
+  || path.resolve(__dirname, '../../assets/watermark.png');
+
+const WATERMARK_RATIO = 0.15;
+const PADDING         = 15;
 
 /**
  * @param {string} inputPath

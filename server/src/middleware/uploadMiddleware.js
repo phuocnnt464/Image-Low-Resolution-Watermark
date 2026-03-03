@@ -30,11 +30,11 @@ const upload = multer({
   fileFilter,
   limits: {
     fileSize: parseInt(process.env.MAX_FILE_SIZE || 50) * 1024 * 1024,
-    files: 21, // tối đa 20 ảnh + 1 watermark
+    files: 21, // 20 ảnh + 1 watermark
   },
 });
 
-// upload.fields: nhận cả 'images' (nhiều) + 'watermark' (1 file)
+// upload.fields: nhận 'images' (nhiều) + 'watermark' (1 file, optional)
 const uploadFields = upload.fields([
   { name: 'images',    maxCount: 20 },
   { name: 'watermark', maxCount: 1  },
