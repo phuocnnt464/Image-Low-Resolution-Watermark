@@ -45,7 +45,25 @@
 
     <!-- Preview ảnh đã chèn watermark (Canvas) -->
     <div v-if="store.selectedFiles.length > 0 && store.watermarkUrl" class="wm-preview-section">
-      <p class="wm-preview-title">👁 Preview ảnh đầu tiên với watermark của bạn:</p>
+      <!-- Header + navigation -->
+      <div class="wm-preview-header">
+        <p class="wm-preview-title">👁 Preview ảnh với watermark:</p>
+        <div class="wm-preview-nav">
+          <button
+            class="wm-nav-btn"
+            :disabled="currentIndex === 0"
+            @click="currentIndex--"
+          >‹</button>
+          <span class="wm-nav-counter">{{ currentIndex + 1 }} / {{ store.selectedFiles.length }}</span>
+          <button
+            class="wm-nav-btn"
+            :disabled="currentIndex === store.selectedFiles.length - 1"
+            @click="currentIndex++"
+          >›</button>
+        </div>
+      </div>
+
+      <p class="wm-preview-filename">{{ store.selectedFiles[currentIndex]?.name }}</p>
       <canvas ref="canvasRef" class="wm-canvas"></canvas>
     </div>
   </div>
@@ -59,6 +77,7 @@ const store      = useImageStore()
 const inputRef   = ref(null)
 const canvasRef  = ref(null)
 const isDragging = ref(false)
+const currentIndex = ref(0)
 
 const onFileChange = (e) => {
   const file = e.target.files?.[0]
@@ -72,15 +91,13 @@ const onDrop = (e) => {
   if (file) store.setWatermark(file)
 }
 
-// Dùng nextTick để đợi DOM render xong trước khi vẽ canvas
 const drawPreview = async () => {
-  // Đợi Vue cập nhật DOM (v-if render canvas xong)
   await nextTick()
 
   const canvas = canvasRef.value
   if (!canvas) return
 
-  const imgUrl = store.previewUrls[0]
+  const imgUrl = store.previewUrls[currentIndex.value]  // ← dùng currentIndex
   const wmUrl  = store.watermarkUrl
   if (!imgUrl || !wmUrl) return
 
@@ -129,12 +146,19 @@ const drawPreview = async () => {
   ctx.drawImage(wm, left, top, wmW, wmH)
 }
 
-// KHÔNG dùng immediate: true vì DOM chưa render khi watch chạy lần đầu
-// Chỉ vẽ lại khi watermark hoặc ảnh THAY ĐỔI sau khi mount
+// Vẽ lại khi đổi watermark, đổi ảnh upload, hoặc chuyển index
 watch(
-  () => [store.watermarkUrl, store.previewUrls[0]],
+  () => [store.watermarkUrl, store.previewUrls[currentIndex.value], currentIndex.value],
   ([newWmUrl, newImgUrl]) => {
     if (newWmUrl && newImgUrl) drawPreview()
+  }
+)
+
+// Reset index về 0 nếu xóa bớt ảnh và index vượt quá
+watch(
+  () => store.selectedFiles.length,
+  (len) => {
+    if (currentIndex.value >= len) currentIndex.value = Math.max(0, len - 1)
   }
 )
 </script>
@@ -207,12 +231,59 @@ watch(
 }
 .wm-clear:hover { background: #fef2f2; }
 
+/* ── Preview section ── */
 .wm-preview-section { margin-top: 16px; }
+
+.wm-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
 .wm-preview-title {
   font-size: 12px;
   color: #64748b;
-  margin: 0 0 8px;
+  margin: 0;
 }
+
+/* Navigation */
+.wm-preview-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.wm-nav-btn {
+  background: #e2e8f0;
+  border: none;
+  border-radius: 50%;
+  width: 26px; height: 26px;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: #475569;
+  padding: 0;
+  transition: background 0.15s;
+}
+.wm-nav-btn:hover:not(:disabled) { background: #3b82f6; color: white; }
+.wm-nav-btn:disabled { opacity: 0.3; cursor: default; }
+.wm-nav-counter {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+  min-width: 36px;
+  text-align: center;
+}
+
+.wm-preview-filename {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 0 0 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .wm-canvas {
   max-width: 100%;
   border-radius: 6px;
