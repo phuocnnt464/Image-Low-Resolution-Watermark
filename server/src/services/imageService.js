@@ -4,7 +4,7 @@ require('dotenv').config();
 
 const WATERMARK_PATH  = process.env.WATERMARK_PATH || './assets/watermark.png';
 const WATERMARK_RATIO = 0.15; // watermark rộng tối đa 15% chiều rộng ảnh gốc
-const PADDING         = 15;   // px cách mép
+const PADDING         = 10;   // px cách mép
 
 /**
  * Xử lý ảnh:
@@ -61,7 +61,7 @@ const processImage = async (inputPath, outputPath, scalePercent = 50) => {
       top:   Math.max(0, origH - wmH - PADDING), // góc trái dưới
     }];
   } else {
-    console.warn(`⚠️  Watermark không tìm thấy: ${WATERMARK_PATH}`);
+    console.warn(`⚠️ Watermark không tìm thấy: ${WATERMARK_PATH}`);
   }
 
   // 5. Composite watermark vào ảnh đã degrade
