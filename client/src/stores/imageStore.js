@@ -10,7 +10,7 @@ export const useImageStore = defineStore('image', () => {
   const errorMessage       = ref('')
   const resolutionPreset   = ref('FHD')   // ← thay scalePercent
 
-  // ── Watermark state ────────────────────────────────────���──────────────────
+  // ── Watermark state ──────────────────────────────────────────────────────
   const watermarkFile     = ref(null)
   const watermarkUrl      = ref('')
   const watermarkPosition = ref('bottom-left')
