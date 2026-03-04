@@ -58,7 +58,7 @@ const processImages = async (req, res) => {
         originalHeight:    null,
         processedWidth:    null,
         processedHeight:   null,
-        resolutionPreset,          // ← lưu preset thay scalePercent
+        resolutionPreset,          
         watermarkApplied:  hasCustomWatermark,
         status:            'pending',
       });

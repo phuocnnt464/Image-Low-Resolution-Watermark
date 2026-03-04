@@ -15,7 +15,7 @@ const create = async ({
   originalHeight,
   processedWidth,
   processedHeight,
-  resolutionPreset,   // ← thay scalePercent
+  resolutionPreset,   
   watermarkApplied,
   status,
 }) => {
