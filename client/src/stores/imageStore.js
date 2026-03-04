@@ -3,17 +3,17 @@ import { ref } from 'vue'
 import { processImages as apiProcessImages, getHistory, deleteHistory } from '../services/api'
 
 export const useImageStore = defineStore('image', () => {
-  const selectedFiles   = ref([])
-  const previewUrls     = ref([])
-  const isProcessing    = ref(false)
-  const history         = ref([])
-  const errorMessage    = ref('')
-  const scalePercent    = ref(50)
+  const selectedFiles      = ref([])
+  const previewUrls        = ref([])
+  const isProcessing       = ref(false)
+  const history            = ref([])
+  const errorMessage       = ref('')
+  const resolutionPreset   = ref('FHD')   // ← thay scalePercent
 
-  // ── Watermark state ───────────────────────────────────────────────────────
-  const watermarkFile     = ref(null)     // File | null
-  const watermarkUrl      = ref('')       // object URL để preview watermark
-  const watermarkPosition = ref('bottom-left') // vị trí mặc định
+  // ── Watermark state ────────────────────────────────────���──────────────────
+  const watermarkFile     = ref(null)
+  const watermarkUrl      = ref('')
+  const watermarkPosition = ref('bottom-left')
 
   const setWatermark = (file) => {
     if (watermarkUrl.value) URL.revokeObjectURL(watermarkUrl.value)
@@ -55,9 +55,9 @@ export const useImageStore = defineStore('image', () => {
     try {
       const response = await apiProcessImages(
         selectedFiles.value,
-        scalePercent.value,
+        resolutionPreset.value,     // ← truyền preset thay vì scalePercent
         watermarkFile.value,
-        watermarkPosition.value   // ← truyền position
+        watermarkPosition.value
       )
 
       const disposition = response.headers['content-disposition']
@@ -109,7 +109,8 @@ export const useImageStore = defineStore('image', () => {
   }
 
   return {
-    selectedFiles, previewUrls, isProcessing, history, errorMessage, scalePercent,
+    selectedFiles, previewUrls, isProcessing, history, errorMessage,
+    resolutionPreset,                           // ← export preset
     watermarkFile, watermarkUrl, watermarkPosition,
     setWatermark, clearWatermark,
     addFiles, removeFile, clearFiles,

@@ -17,28 +17,34 @@
       </div>
     </div>
 
-    <!-- Scale control -->
-    <div class="scale-control">
-    <label>
-        Mức độ giảm resolution:
-        <strong>{{ store.scalePercent }}%</strong>
-        <span class="scale-desc">
-        — {{ store.scalePercent <= 25 ? 'Ít mất chi tiết' : store.scalePercent <= 60 ? 'Vừa phải' : 'Mất nhiều chi tiết' }}
+    <!-- Resolution preset picker -->
+    <div class="resolution-control">
+      <div class="resolution-control__header">
+        <span class="resolution-control__title">🎛 Mức độ giảm chất lượng</span>
+        <span class="resolution-control__selected">
+          {{ selectedPreset.label }}
+          <em>— {{ selectedPreset.desc }}</em>
         </span>
-    </label>
-    <input
-        type="range"
-        min="10"
-        max="90"
-        step="5"
-        v-model.number="store.scalePercent"
-    />
-    <div class="scale-ticks">
-        <span>10% (ít)</span>
-        <span>50%</span>
-        <span>90% (nhiều)</span>
+      </div>
+
+      <div class="resolution-grid">
+        <button
+          v-for="preset in presets"
+          :key="preset.value"
+          class="res-btn"
+          :class="{
+            'res-btn--active': store.resolutionPreset === preset.value,
+            [`res-btn--tier-${preset.tier}`]: true,
+          }"
+          :title="preset.desc"
+          @click="store.resolutionPreset = preset.value"
+        >
+          <span class="res-btn__name">{{ preset.value }}</span>
+          <span class="res-btn__sub">{{ preset.sub }}</span>
+        </button>
+      </div>
     </div>
-    </div>
+
     <!-- Error message -->
     <p v-if="store.errorMessage" class="error">⚠️ {{ store.errorMessage }}</p>
 
@@ -55,8 +61,25 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { useImageStore } from '../stores/imageStore'
+
 const store = useImageStore()
+
+const presets = [
+  { value: 'Original', label: 'Gốc (Original)', sub: 'Giữ nguyên',  desc: 'Giữ nguyên resolution, chất lượng cao nhất', tier: 'high' },
+  { value: '4K',       label: '4K (3840px)',     sub: '3840px',      desc: 'Ultra HD — rất ít mất chi tiết',             tier: 'high' },
+  { value: 'QHD',      label: 'QHD (2560px)',    sub: '2560px',      desc: 'Quad HD — ít mất chi tiết',                  tier: 'high' },
+  { value: 'FHD',      label: 'Full HD (1920px)',sub: '1920px',      desc: 'Full HD — tiêu chuẩn phổ biến',              tier: 'mid'  },
+  { value: 'HD',       label: 'HD (1280px)',     sub: '1280px',      desc: 'HD — mất một phần chi tiết',                 tier: 'mid'  },
+  { value: 'SD',       label: 'SD (854px)',      sub: '854px',       desc: 'Standard — mất khá nhiều chi tiết',          tier: 'low'  },
+  { value: 'LD',       label: 'LD (480px)',      sub: '480px',       desc: 'Low Def — mất nhiều chi tiết',               tier: 'low'  },
+  { value: 'Tiny',     label: 'Tiny (240px)',    sub: '240px',       desc: 'Cực thấp — pixel hoá rõ rệt',                tier: 'low'  },
+]
+
+const selectedPreset = computed(
+  () => presets.find(p => p.value === store.resolutionPreset) ?? presets[3]
+)
 </script>
 
 <style scoped>
@@ -115,22 +138,103 @@ const store = useImageStore()
   margin: 0;
 }
 
-.scale-control {
+/* ── Resolution preset picker ── */
+.resolution-control {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-  padding: 16px;
+  padding: 14px 16px;
   margin-bottom: 16px;
 }
-.scale-control label { display: block; margin-bottom: 8px; color: #475569; }
-.scale-control input[type="range"] { width: 100%; accent-color: #3b82f6; }
-.scale-ticks {
+
+.resolution-control__header {
   display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  color: #94a3b8;
-  margin-top: 4px;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
 }
+
+.resolution-control__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+}
+
+.resolution-control__selected {
+  font-size: 12px;
+  color: #3b82f6;
+  font-weight: 600;
+}
+.resolution-control__selected em {
+  font-style: normal;
+  font-weight: 400;
+  color: #64748b;
+}
+
+.resolution-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+@media (max-width: 480px) {
+  .resolution-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.res-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 4px;
+  border-radius: 7px;
+  border: 1.5px solid #e2e8f0;
+  background: white;
+  cursor: pointer;
+  transition: all 0.15s;
+  gap: 2px;
+  line-height: 1.2;
+}
+.res-btn:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.res-btn__name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+.res-btn__sub {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+/* Tier màu sắc cho border khi active */
+.res-btn--active.res-btn--tier-high {
+  border-color: #22c55e;
+  background: #f0fdf4;
+}
+.res-btn--active.res-btn--tier-high .res-btn__name { color: #16a34a; }
+
+.res-btn--active.res-btn--tier-mid {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+.res-btn--active.res-btn--tier-mid .res-btn__name { color: #2563eb; }
+
+.res-btn--active.res-btn--tier-low {
+  border-color: #f97316;
+  background: #fff7ed;
+}
+.res-btn--active.res-btn--tier-low .res-btn__name { color: #ea580c; }
+
+/* Màu sub text theo tier */
+.res-btn--tier-high .res-btn__sub { color: #86efac; }
+.res-btn--tier-mid  .res-btn__sub { color: #93c5fd; }
+.res-btn--tier-low  .res-btn__sub { color: #fdba74; }
 
 .error { color: #ef4444; font-size: 14px; margin-bottom: 12px; }
 

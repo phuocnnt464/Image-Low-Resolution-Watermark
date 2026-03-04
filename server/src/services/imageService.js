@@ -9,6 +9,22 @@ const DEFAULT_WATERMARK_PATH = process.env.WATERMARK_PATH
 const WATERMARK_RATIO = 0.15;
 const PADDING         = 15;
 
+/**
+ * Bảng preset: targetWidth là chiều rộng để downsample xuống,
+ * sau đó upsample ngược lại về kích thước gốc.
+ * null = giữ nguyên resolution (chỉ thay đổi quality encode)
+ */
+const RESOLUTION_PRESETS = {
+  'Original': { targetWidth: null, jpegQuality: 92, webpQuality: 92, pngCompression: 1 },
+  '4K':       { targetWidth: 3840, jpegQuality: 85, webpQuality: 85, pngCompression: 2 },
+  'QHD':      { targetWidth: 2560, jpegQuality: 78, webpQuality: 78, pngCompression: 4 },
+  'FHD':      { targetWidth: 1920, jpegQuality: 70, webpQuality: 70, pngCompression: 5 },
+  'HD':       { targetWidth: 1280, jpegQuality: 60, webpQuality: 60, pngCompression: 6 },
+  'SD':       { targetWidth: 854,  jpegQuality: 48, webpQuality: 48, pngCompression: 7 },
+  'LD':       { targetWidth: 480,  jpegQuality: 35, webpQuality: 35, pngCompression: 8 },
+  'Tiny':     { targetWidth: 240,  jpegQuality: 20, webpQuality: 20, pngCompression: 9 },
+}
+
 const calcPosition = (position, origW, origH, wmW, wmH, padding) => {
   const cx = Math.round((origW - wmW) / 2)
   const cy = Math.round((origH - wmH) / 2)
@@ -33,20 +49,17 @@ const calcPosition = (position, origW, origH, wmW, wmH, padding) => {
 }
 
 /**
- * scalePercent (10–90):
- *   10 = Ít mất chi tiết  → resolution cao, quality cao → file nặng
- *   90 = Mất nhiều chi tiết → resolution thấp, quality thấp → file nhẹ
- *
- * Công thức (t = 0 ít mất, t = 1 mất nhiều):
- *   t                = (scalePercent - 10) / 80
- *   downsampleRatio  = 1 - t * 0.90        → 1.00 (10%) → 0.10 (90%)
- *   jpegQuality      = round(92 - t * 74)  → 92   (10%) → 18   (90%)
+ * @param {string} inputPath
+ * @param {string} outputPath
+ * @param {string} resolutionPreset  - 'Original'|'4K'|'QHD'|'FHD'|'HD'|'SD'|'LD'|'Tiny'
+ * @param {string} watermarkPath
+ * @param {string} watermarkPosition
  */
 const processImage = async (
   inputPath,
   outputPath,
-  scalePercent = 50,
-  watermarkPath = null,
+  resolutionPreset = 'FHD',
+  watermarkPath    = null,
   watermarkPosition = 'bottom-left'
 ) => {
   const wmPath = watermarkPath || DEFAULT_WATERMARK_PATH;
@@ -56,31 +69,38 @@ const processImage = async (
   const origH  = meta.height;
   const format = meta.format;
 
-  // ── Tính tham số degradation ─────────────────────────────────────────────
-  // t: 0.0 = ít mất (scalePercent=10), 1.0 = mất nhiều (scalePercent=90)
-  const t = (scalePercent - 10) / 80;
+  // ── Lấy tham số preset ────────────────────────────────────────────────────
+  const preset = RESOLUTION_PRESETS[resolutionPreset] ?? RESOLUTION_PRESETS['FHD'];
+  const { targetWidth, jpegQuality, webpQuality, pngCompression } = preset;
 
-  // 1. Downsample resolution: t=0 → 100%, t=1 → 10%
-  const downsampleRatio = 1 - t * 0.90;
-  const midW = Math.max(2, Math.round(origW * downsampleRatio));
-  const midH = Math.max(2, Math.round(origH * downsampleRatio));
+  // ── Tính kích thước downsample ─────────────────────────────────────────────
+  // Chỉ downsample nếu targetWidth nhỏ hơn kích thước gốc
+  let degradedBuffer;
 
-  // 2. Encode quality: t=0 → 92, t=1 → 18
-  const encodeQuality = Math.round(92 - t * 74);
+  if (targetWidth !== null && targetWidth < origW) {
+    // Tính height tương ứng giữ tỉ lệ
+    const ratio  = targetWidth / origW;
+    const midW   = Math.max(2, targetWidth);
+    const midH   = Math.max(2, Math.round(origH * ratio));
 
-  // ── Degraded: resize xuống → resize lên lại (giữ nguyên kích thước pixel) ─
-  const degradedBuffer = await sharp(inputPath)
-    .resize(midW, midH, {
-      kernel: sharp.kernel.nearest,   // nearest-neighbor: giữ hard pixel edge
-      withoutEnlargement: false,
-    })
-    .resize(origW, origH, {
-      kernel: sharp.kernel.nearest,
-      withoutEnlargement: false,
-    })
-    .toBuffer();
+    degradedBuffer = await sharp(inputPath)
+      // Bước 1: downsample xuống targetWidth
+      .resize(midW, midH, {
+        kernel: sharp.kernel.nearest,
+        withoutEnlargement: false,
+      })
+      // Bước 2: upsample về kích thước gốc (tạo pixelation/mất chi tiết)
+      .resize(origW, origH, {
+        kernel: sharp.kernel.nearest,
+        withoutEnlargement: false,
+      })
+      .toBuffer();
+  } else {
+    // Original hoặc preset lớn hơn ảnh gốc → không downsample
+    degradedBuffer = await sharp(inputPath).toBuffer();
+  }
 
-  // ── Watermark ────────────────────────────────────────────────────────────
+  // ── Watermark ─────────────────────────────────────────────────────────────
   let compositeOptions = [];
 
   if (fs.existsSync(wmPath)) {
@@ -100,7 +120,7 @@ const processImage = async (
     console.warn(`Watermark không tìm thấy: ${wmPath}`);
   }
 
-  // ── Encode output ─────────────────────────────────────────────────────────
+  // ── Encode output ──────────────────────────────────────────────────────────
   let pipeline = sharp(degradedBuffer)
     .composite(compositeOptions)
     .withMetadata({ density: 72 });
@@ -108,34 +128,30 @@ const processImage = async (
   switch (format) {
     case 'jpeg':
       pipeline = pipeline.jpeg({
-        quality: encodeQuality,
+        quality: jpegQuality,
         progressive: true,
         mozjpeg: true,
       });
       break;
 
     case 'png':
-      // PNG: dùng palette (giảm bit depth màu) + compressionLevel tăng dần
       pipeline = pipeline.png({
-        compressionLevel: Math.min(9, Math.round(1 + t * 8)),  // 1 → 9
-        palette: t >= 0.25,       // bật giảm màu từ scalePercent >= 30
-        colours: t >= 0.25
-          ? Math.max(16, Math.round(256 - t * 224))  // 256 → 32
+        compressionLevel: pngCompression,
+        // Bật palette (giảm bit depth màu) cho các preset thấp
+        palette: pngCompression >= 6,
+        colours: pngCompression >= 6
+          ? Math.max(32, 256 - (pngCompression - 6) * 56)  // 256→32
           : 256,
-        dither: Math.min(1, t * 1.2),
       });
       break;
 
     case 'webp':
-      pipeline = pipeline.webp({
-        quality: encodeQuality,
-        effort: Math.round(t * 6),  // 0 → 6 (nén nặng hơn)
-      });
+      pipeline = pipeline.webp({ quality: webpQuality });
       break;
 
     default:
       pipeline = pipeline.jpeg({
-        quality: encodeQuality,
+        quality: jpegQuality,
         progressive: true,
         mozjpeg: true,
       });
@@ -144,9 +160,9 @@ const processImage = async (
   const info = await pipeline.toFile(outputPath);
 
   console.log(
-    `[processImage] scale=${scalePercent}% | t=${t.toFixed(2)} | ` +
-    `downsample=${(downsampleRatio * 100).toFixed(0)}% (${midW}×${midH}→${origW}×${origH}) | ` +
-    `quality=${encodeQuality} | output=${info.size} bytes`
+    `[processImage] preset=${resolutionPreset} | ` +
+    `targetWidth=${targetWidth ?? 'original'} (${origW}×${origH}) | ` +
+    `jpegQuality=${jpegQuality} | output=${(info.size / 1024).toFixed(1)} KB`
   );
 
   return {

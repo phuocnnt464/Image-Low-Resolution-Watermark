@@ -6,15 +6,15 @@ const apiClient = axios.create({
 })
 
 /**
- * @param {File[]}      files
- * @param {number}      scalePercent
- * @param {File|null}   watermarkFile
- * @param {string}      watermarkPosition  
+ * @param {File[]}    files
+ * @param {string}    resolutionPreset  - 'Original'|'4K'|'QHD'|'FHD'|'HD'|'SD'|'LD'|'Tiny'
+ * @param {File|null} watermarkFile
+ * @param {string}    watermarkPosition
  */
-const processImages = async (files, scalePercent = 50, watermarkFile = null, watermarkPosition = 'bottom-left') => {
+const processImages = async (files, resolutionPreset = 'FHD', watermarkFile = null, watermarkPosition = 'bottom-left') => {
   const formData = new FormData()
   files.forEach((file) => formData.append('images', file))
-  formData.append('scalePercent', scalePercent)
+  formData.append('resolutionPreset', resolutionPreset)
   formData.append('watermarkPosition', watermarkPosition)
 
   if (watermarkFile) {
