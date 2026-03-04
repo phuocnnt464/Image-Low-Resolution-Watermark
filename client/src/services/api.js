@@ -6,23 +6,22 @@ const apiClient = axios.create({
 })
 
 /**
- * Upload ảnh để xử lý — nhận về blob để download
  * @param {File[]}      files
  * @param {number}      scalePercent
- * @param {File|null}   watermarkFile  - watermark tùy chỉnh, null = dùng mặc định
+ * @param {File|null}   watermarkFile
+ * @param {string}      watermarkPosition  
  */
-const processImages = async (files, scalePercent = 50, watermarkFile = null) => {
+const processImages = async (files, scalePercent = 50, watermarkFile = null, watermarkPosition = 'bottom-left') => {
   const formData = new FormData()
   files.forEach((file) => formData.append('images', file))
   formData.append('scalePercent', scalePercent)
+  formData.append('watermarkPosition', watermarkPosition)
 
-  // Chỉ append watermark nếu user có upload
   if (watermarkFile) {
     formData.append('watermark', watermarkFile)
   }
 
   const response = await apiClient.post('/images/process', formData, {
-    // Không set Content-Type thủ công — để browser tự set boundary cho multipart
     responseType: 'blob',
   })
 

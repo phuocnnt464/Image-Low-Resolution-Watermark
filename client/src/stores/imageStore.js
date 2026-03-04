@@ -11,8 +11,9 @@ export const useImageStore = defineStore('image', () => {
   const scalePercent    = ref(50)
 
   // ── Watermark state ───────────────────────────────────────────────────────
-  const watermarkFile   = ref(null)     // File | null
-  const watermarkUrl    = ref('')       // object URL để preview watermark
+  const watermarkFile     = ref(null)     // File | null
+  const watermarkUrl      = ref('')       // object URL để preview watermark
+  const watermarkPosition = ref('bottom-left') // vị trí mặc định
 
   const setWatermark = (file) => {
     if (watermarkUrl.value) URL.revokeObjectURL(watermarkUrl.value)
@@ -55,7 +56,8 @@ export const useImageStore = defineStore('image', () => {
       const response = await apiProcessImages(
         selectedFiles.value,
         scalePercent.value,
-        watermarkFile.value   // null = dùng watermark mặc định
+        watermarkFile.value,
+        watermarkPosition.value   // ← truyền position
       )
 
       const disposition = response.headers['content-disposition']
@@ -108,7 +110,7 @@ export const useImageStore = defineStore('image', () => {
 
   return {
     selectedFiles, previewUrls, isProcessing, history, errorMessage, scalePercent,
-    watermarkFile, watermarkUrl,
+    watermarkFile, watermarkUrl, watermarkPosition,
     setWatermark, clearWatermark,
     addFiles, removeFile, clearFiles,
     processAndDownload, fetchHistory, removeHistory,

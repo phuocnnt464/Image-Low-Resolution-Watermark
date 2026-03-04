@@ -43,6 +43,22 @@
       </button>
     </div>
 
+    <!-- ── Chọn vị trí watermark ── -->
+    <div class="wm-position-section">
+      <p class="wm-position-label">📍 Vị trí watermark:</p>
+      <div class="wm-position-grid">
+        <button
+          v-for="pos in positions"
+          :key="pos.value"
+          class="wm-pos-btn"
+          :class="{ 'wm-pos-btn--active': store.watermarkPosition === pos.value }"
+          :title="pos.label"
+          @click="store.watermarkPosition = pos.value"
+        >{{ pos.icon }}</button>
+      </div>
+      <p class="wm-position-name">{{ currentPositionLabel }}</p>
+    </div>
+
     <!-- Preview ảnh đã chèn watermark (Canvas) -->
     <div v-if="store.selectedFiles.length > 0 && store.watermarkUrl" class="wm-preview-section">
       <div class="wm-preview-header">
@@ -69,7 +85,7 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useImageStore } from '../stores/imageStore'
 
 const store      = useImageStore()
@@ -77,6 +93,36 @@ const inputRef   = ref(null)
 const canvasRef  = ref(null)
 const isDragging = ref(false)
 const currentIndex = ref(0)
+
+// ── Danh sách vị trí ─────────────────────────────────────────────────────
+const positions = [
+  { value: 'top-left',      label: 'Trên trái',      icon: '↖' },
+  { value: 'top-center',    label: 'Trên giữa',      icon: '↑' },
+  { value: 'top-right',     label: 'Trên phải',      icon: '↗' },
+  { value: 'center',        label: 'Giữa',           icon: '⊙' },
+  { value: 'center',        label: 'Giữa',           icon: '⊙' }, // placeholder để giữ layout 3x3
+  { value: 'center',        label: 'Giữa',           icon: '⊙' }, // placeholder
+  { value: 'bottom-left',   label: 'Dưới trái',      icon: '↙' },
+  { value: 'bottom-center', label: 'Dưới giữa',      icon: '↓' },
+  { value: 'bottom-right',  label: 'Dưới phải',      icon: '↘' },
+]
+
+// Layout đúng: 3 hàng × 3 cột
+const positionGrid = [
+  { value: 'top-left',      label: 'Trên trái',  icon: '↖' },
+  { value: 'top-center',    label: 'Trên giữa',  icon: '↑' },
+  { value: 'top-right',     label: 'Trên phải',  icon: '↗' },
+  { value: 'center-left',   label: 'Giữa trái',  icon: '←' },
+  { value: 'center',        label: 'Giữa',        icon: '⊙' },
+  { value: 'center-right',  label: 'Giữa phải',  icon: '→' },
+  { value: 'bottom-left',   label: 'Dưới trái',  icon: '↙' },
+  { value: 'bottom-center', label: 'Dưới giữa',  icon: '↓' },
+  { value: 'bottom-right',  label: 'Dưới phải',  icon: '↘' },
+]
+
+const currentPositionLabel = computed(
+  () => positionGrid.find(p => p.value === store.watermarkPosition)?.label ?? ''
+)
 
 const onFileChange = (e) => {
   const file = e.target.files?.[0]
@@ -90,28 +136,44 @@ const onDrop = (e) => {
   if (file) store.setWatermark(file)
 }
 
+// ── Tính tọa độ watermark theo position ──────────────────────────────────
+const calcWmPosition = (position, canvasW, canvasH, wmW, wmH, padding) => {
+  const cx = Math.round((canvasW - wmW) / 2)
+  const cy = Math.round((canvasH - wmH) / 2)
+
+  const map = {
+    'top-left':      { left: padding,               top: padding },
+    'top-center':    { left: cx,                    top: padding },
+    'top-right':     { left: canvasW - wmW - padding, top: padding },
+    'center-left':   { left: padding,               top: cy },
+    'center':        { left: cx,                    top: cy },
+    'center-right':  { left: canvasW - wmW - padding, top: cy },
+    'bottom-left':   { left: padding,               top: canvasH - wmH - padding },
+    'bottom-center': { left: cx,                    top: canvasH - wmH - padding },
+    'bottom-right':  { left: canvasW - wmW - padding, top: canvasH - wmH - padding },
+  }
+
+  const pos = map[position] || map['bottom-left']
+  return { left: Math.max(0, pos.left), top: Math.max(0, pos.top) }
+}
+
 const drawPreview = async () => {
   await nextTick()
 
   const canvas = canvasRef.value
   if (!canvas) return
 
-  const imgUrl = store.previewUrls[currentIndex.value]  
+  const imgUrl = store.previewUrls[currentIndex.value]
   const wmUrl  = store.watermarkUrl
   if (!imgUrl || !wmUrl) return
 
   const ctx = canvas.getContext('2d')
 
-  // Load ảnh gốc
   const img = new Image()
   img.crossOrigin = 'anonymous'
   img.src = imgUrl
-  await new Promise((resolve, reject) => {
-    img.onload = resolve
-    img.onerror = reject
-  })
+  await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject })
 
-  // Tính kích thước canvas (max 600px rộng)
   const maxW  = 600
   const scale = Math.min(1, maxW / img.naturalWidth)
   const dispW = Math.round(img.naturalWidth  * scale)
@@ -119,28 +181,20 @@ const drawPreview = async () => {
 
   canvas.width  = dispW
   canvas.height = dispH
-
-  // Vẽ ảnh gốc
   ctx.drawImage(img, 0, 0, dispW, dispH)
 
-  // Load watermark
   const wm = new Image()
   wm.crossOrigin = 'anonymous'
   wm.src = wmUrl
-  await new Promise((resolve, reject) => {
-    wm.onload = resolve
-    wm.onerror = reject
-  })
+  await new Promise((resolve, reject) => { wm.onload = resolve; wm.onerror = reject })
 
-  // Tính kích thước watermark: 15% chiều rộng canvas
   const wmMaxW  = Math.round(dispW * 0.15)
   const wmScale = wmMaxW / wm.naturalWidth
   const wmW     = Math.round(wm.naturalWidth  * wmScale)
   const wmH     = Math.round(wm.naturalHeight * wmScale)
 
   const padding = Math.max(8, Math.round(15 * scale))
-  const left    = padding
-  const top     = Math.max(0, dispH - wmH - padding)
+  const { left, top } = calcWmPosition(store.watermarkPosition, dispW, dispH, wmW, wmH, padding)
 
   ctx.drawImage(wm, left, top, wmW, wmH)
 }
@@ -158,7 +212,12 @@ watch(currentIndex, () => {
   if (store.watermarkUrl && store.previewUrls[currentIndex.value]) drawPreview()
 })
 
-// Reset index về 0 nếu xóa bớt ảnh và index vượt quá
+// Vẽ lại khi đổi vị trí
+watch(() => store.watermarkPosition, () => {
+  if (store.watermarkUrl && store.previewUrls[currentIndex.value]) drawPreview()
+})
+
+// Reset index nếu xóa ảnh
 watch(
   () => store.selectedFiles.length,
   (len) => {
@@ -235,6 +294,51 @@ watch(
 }
 .wm-clear:hover { background: #fef2f2; }
 
+/* ── Position picker ── */
+.wm-position-section {
+  margin-top: 14px;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+.wm-position-label {
+  font-size: 12px;
+  color: #475569;
+  margin: 0 0 8px;
+}
+.wm-position-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 32px);
+  grid-template-rows: repeat(3, 32px);
+  gap: 4px;
+  width: fit-content;
+}
+.wm-pos-btn {
+  width: 32px; height: 32px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+  padding: 0;
+  color: #64748b;
+}
+.wm-pos-btn:hover { background: #eff6ff; border-color: #3b82f6; color: #3b82f6; }
+.wm-pos-btn--active {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: white;
+}
+.wm-position-name {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: #3b82f6;
+  font-weight: 600;
+}
+
 /* ── Preview section ── */
 .wm-preview-section { margin-top: 16px; }
 
@@ -244,18 +348,9 @@ watch(
   justify-content: space-between;
   margin-bottom: 6px;
 }
-.wm-preview-title {
-  font-size: 12px;
-  color: #64748b;
-  margin: 0;
-}
+.wm-preview-title { font-size: 12px; color: #64748b; margin: 0; }
 
-/* Navigation */
-.wm-preview-nav {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
+.wm-preview-nav { display: flex; align-items: center; gap: 6px; }
 .wm-nav-btn {
   background: #e2e8f0;
   border: none;

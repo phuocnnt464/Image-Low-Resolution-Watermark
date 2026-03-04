@@ -7,15 +7,41 @@ const DEFAULT_WATERMARK_PATH = process.env.WATERMARK_PATH
   || path.resolve(__dirname, '../../assets/watermark.png');
 
 const WATERMARK_RATIO = 0.15;
-const PADDING         = 15;
+const PADDING         = 10;
+
+/**
+ * Tính tọa độ (left, top) của watermark theo vị trí
+ * @param {string} position
+ */
+const calcPosition = (position, origW, origH, wmW, wmH, padding) => {
+  const cx = Math.round((origW - wmW) / 2)  // căn ngang giữa
+  const cy = Math.round((origH - wmH) / 2)  // căn dọc giữa
+
+  const positions = {
+    'top-left':      { left: padding,              top: padding },
+    'top-center':    { left: cx,                   top: padding },
+    'top-right':     { left: origW - wmW - padding, top: padding },
+    'center':        { left: cx,                   top: cy },
+    'bottom-left':   { left: padding,              top: origH - wmH - padding },
+    'bottom-center': { left: cx,                   top: origH - wmH - padding },
+    'bottom-right':  { left: origW - wmW - padding, top: origH - wmH - padding },
+  }
+
+  const pos = positions[position] || positions['bottom-left']
+  return {
+    left: Math.max(0, pos.left),
+    top:  Math.max(0, pos.top),
+  }
+}
 
 /**
  * @param {string} inputPath
  * @param {string} outputPath
- * @param {number} scalePercent   - % downsample (10=ít mất, 90=mất nhiều)
- * @param {string} watermarkPath  - đường dẫn watermark (user upload hoặc mặc định)
+ * @param {number} scalePercent
+ * @param {string} watermarkPath
+ * @param {string} watermarkPosition
  */
-const processImage = async (inputPath, outputPath, scalePercent = 50, watermarkPath = null) => {
+const processImage = async (inputPath, outputPath, scalePercent = 50, watermarkPath = null, watermarkPosition = 'bottom-left') => {
   const wmPath = watermarkPath || DEFAULT_WATERMARK_PATH;
 
   const meta   = await sharp(inputPath).metadata();
@@ -32,7 +58,6 @@ const processImage = async (inputPath, outputPath, scalePercent = 50, watermarkP
     .resize(origW, origH, { kernel: sharp.kernel.nearest })
     .toBuffer();
 
-  // Watermark sắc nét — render hoàn toàn độc lập
   let compositeOptions = [];
 
   if (fs.existsSync(wmPath)) {
@@ -46,11 +71,9 @@ const processImage = async (inputPath, outputPath, scalePercent = 50, watermarkP
       .resize(wmW, wmH, { kernel: sharp.kernel.lanczos3 })
       .toBuffer();
 
-    compositeOptions = [{
-      input: watermarkBuffer,
-      left:  PADDING,
-      top:   Math.max(0, origH - wmH - PADDING),
-    }];
+    const { left, top } = calcPosition(watermarkPosition, origW, origH, wmW, wmH, PADDING);
+
+    compositeOptions = [{ input: watermarkBuffer, left, top }];
   } else {
     console.warn(`Watermark không tìm thấy: ${wmPath}`);
   }
