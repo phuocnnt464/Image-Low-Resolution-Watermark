@@ -14,10 +14,10 @@
         <thead>
           <tr>
             <th>Tên file gốc</th>
-            <th>Kích thước gốc</th>
-            <th>Kích thước mới</th>
+            <th>Dung lượng gốc</th>
+            <th>Dung lượng mới</th>
             <th>Resolution</th>
-            <th>Scale</th>
+            <th>Preset</th>
             <th>Trạng thái</th>
             <th>Thời gian</th>
             <th></th>
@@ -25,16 +25,26 @@
         </thead>
         <tbody>
           <tr v-for="item in store.history" :key="item.id">
-            <td class="filename">{{ item.original_filename }}</td>
+            <td class="filename" :title="item.original_filename">
+              {{ item.original_filename }}
+            </td>
             <td>{{ formatSize(item.original_size) }}</td>
-            <td>{{ formatSize(item.processed_size) }}</td>
+            <td>
+              <span :class="sizeClass(item.original_size, item.processed_size)">
+                {{ formatSize(item.processed_size) }}
+              </span>
+            </td>
             <td>
               <span v-if="item.processed_width">
                 {{ item.processed_width }}×{{ item.processed_height }}
               </span>
               <span v-else>—</span>
             </td>
-            <td>{{ item.scale_percent }}%</td>
+            <td>
+              <span class="preset-badge" :class="`preset-badge--${tierOf(item.resolution_preset)}`">
+                {{ item.resolution_preset || '—' }}
+              </span>
+            </td>
             <td>
               <span class="badge" :class="`badge--${item.status}`">
                 {{ statusLabel(item.status) }}
@@ -69,8 +79,24 @@ const formatDate = (dateStr) => {
 }
 
 const statusLabel = (status) => {
-  const map = { pending: '⏳ Đang xử lý', done: '✅ Success', failed: '❌ Failed' }
+  const map = { pending: '⏳ Đang xử lý', done: '✅ Xong', failed: '❌ Thất bại' }
   return map[status] ?? status
+}
+
+// Phân nhóm màu badge theo preset tier
+const tierOf = (preset) => {
+  if (!preset || preset === 'Original' || preset === '4K' || preset === 'QHD') return 'high'
+  if (preset === 'FHD' || preset === 'HD') return 'mid'
+  return 'low'  // SD, LD, Tiny
+}
+
+// Màu dung lượng mới so với gốc
+const sizeClass = (orig, processed) => {
+  if (!orig || !processed) return ''
+  const ratio = processed / orig
+  if (ratio < 0.4) return 'size--much-smaller'
+  if (ratio < 0.8) return 'size--smaller'
+  return 'size--similar'
 }
 </script>
 
@@ -124,6 +150,7 @@ const statusLabel = (status) => {
   color: #334155;
 }
 .history-table tr:hover td { background: #f8fafc; }
+
 .filename {
   max-width: 160px;
   white-space: nowrap;
@@ -131,6 +158,20 @@ const statusLabel = (status) => {
   text-overflow: ellipsis;
 }
 
+/* ── Preset badge ── */
+.preset-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+.preset-badge--high { background: #dcfce7; color: #16a34a; }
+.preset-badge--mid  { background: #dbeafe; color: #2563eb; }
+.preset-badge--low  { background: #fff7ed; color: #ea580c; }
+
+/* ── Status badge ── */
 .badge {
   display: inline-block;
   padding: 2px 8px;
@@ -141,6 +182,11 @@ const statusLabel = (status) => {
 .badge--done    { background: #dcfce7; color: #16a34a; }
 .badge--pending { background: #fef9c3; color: #ca8a04; }
 .badge--failed  { background: #fee2e2; color: #dc2626; }
+
+/* ── Size comparison ── */
+.size--much-smaller { color: #16a34a; font-weight: 600; }
+.size--smaller      { color: #2563eb; }
+.size--similar      { color: #94a3b8; }
 
 .btn-delete {
   background: transparent;

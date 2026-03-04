@@ -10,25 +10,28 @@ const WATERMARK_RATIO = 0.15;
 const PADDING         = 15;
 
 /**
- * Bảng preset: targetWidth là chiều rộng để downsample xuống,
- * sau đó upsample ngược lại về kích thước gốc.
- * null = giữ nguyên resolution (chỉ thay đổi quality encode)
+ * Bảng preset
+ * targetWidth : resize ảnh xuống width này (giữ tỉ lệ), rồi upsample về origW×origH
+ *               null = không downsample, chỉ encode lại với quality cao
+ * jpegQuality : quality encode JPEG / WebP
+ * pngColours  : số màu palette PNG (256 = full, <256 = giảm bit depth màu)
+ * pngCompression: mức nén zlib PNG (1–9)
  */
 const RESOLUTION_PRESETS = {
-  'Original': { targetWidth: null, jpegQuality: 92, webpQuality: 92, pngCompression: 1 },
-  '4K':       { targetWidth: 3840, jpegQuality: 85, webpQuality: 85, pngCompression: 2 },
-  'QHD':      { targetWidth: 2560, jpegQuality: 78, webpQuality: 78, pngCompression: 4 },
-  'FHD':      { targetWidth: 1920, jpegQuality: 70, webpQuality: 70, pngCompression: 5 },
-  'HD':       { targetWidth: 1280, jpegQuality: 60, webpQuality: 60, pngCompression: 6 },
-  'SD':       { targetWidth: 854,  jpegQuality: 48, webpQuality: 48, pngCompression: 7 },
-  'LD':       { targetWidth: 480,  jpegQuality: 35, webpQuality: 35, pngCompression: 8 },
-  'Tiny':     { targetWidth: 240,  jpegQuality: 20, webpQuality: 20, pngCompression: 9 },
+  //             targetWidth  jpegQ  webpQ  pngColours  pngComp
+  'Original': { targetWidth: null, jpegQuality: 92, webpQuality: 92, pngColours: 256, pngCompression: 1 },
+  '4K':       { targetWidth: 3840, jpegQuality: 85, webpQuality: 85, pngColours: 256, pngCompression: 2 },
+  'QHD':      { targetWidth: 2560, jpegQuality: 78, webpQuality: 78, pngColours: 256, pngCompression: 4 },
+  'FHD':      { targetWidth: 1920, jpegQuality: 70, webpQuality: 70, pngColours: 256, pngCompression: 5 },
+  'HD':       { targetWidth: 1280, jpegQuality: 60, webpQuality: 60, pngColours: 128, pngCompression: 6 },
+  'SD':       { targetWidth: 854,  jpegQuality: 48, webpQuality: 48, pngColours: 64,  pngCompression: 7 },
+  'LD':       { targetWidth: 480,  jpegQuality: 35, webpQuality: 35, pngColours: 32,  pngCompression: 8 },
+  'Tiny':     { targetWidth: 240,  jpegQuality: 20, webpQuality: 20, pngColours: 16,  pngCompression: 9 },
 }
 
 const calcPosition = (position, origW, origH, wmW, wmH, padding) => {
   const cx = Math.round((origW - wmW) / 2)
   const cy = Math.round((origH - wmH) / 2)
-
   const positions = {
     'top-left':      { left: padding,               top: padding },
     'top-center':    { left: cx,                    top: padding },
@@ -40,26 +43,15 @@ const calcPosition = (position, origW, origH, wmW, wmH, padding) => {
     'bottom-center': { left: cx,                    top: origH - wmH - padding },
     'bottom-right':  { left: origW - wmW - padding, top: origH - wmH - padding },
   }
-
   const pos = positions[position] || positions['bottom-left']
-  return {
-    left: Math.max(0, pos.left),
-    top:  Math.max(0, pos.top),
-  }
+  return { left: Math.max(0, pos.left), top: Math.max(0, pos.top) }
 }
 
-/**
- * @param {string} inputPath
- * @param {string} outputPath
- * @param {string} resolutionPreset  - 'Original'|'4K'|'QHD'|'FHD'|'HD'|'SD'|'LD'|'Tiny'
- * @param {string} watermarkPath
- * @param {string} watermarkPosition
- */
 const processImage = async (
   inputPath,
   outputPath,
-  resolutionPreset = 'FHD',
-  watermarkPath    = null,
+  resolutionPreset  = 'FHD',
+  watermarkPath     = null,
   watermarkPosition = 'bottom-left'
 ) => {
   const wmPath = watermarkPath || DEFAULT_WATERMARK_PATH;
@@ -69,38 +61,37 @@ const processImage = async (
   const origH  = meta.height;
   const format = meta.format;
 
-  // ── Lấy tham số preset ────────────────────────────────────────────────────
+  // ── Tham số preset ────────────────────────────────────────────────────────
   const preset = RESOLUTION_PRESETS[resolutionPreset] ?? RESOLUTION_PRESETS['FHD'];
-  const { targetWidth, jpegQuality, webpQuality, pngCompression } = preset;
+  const { targetWidth, jpegQuality, webpQuality, pngColours, pngCompression } = preset;
 
-  // ── Tính kích thước downsample ─────────────────────────────────────────────
-  // Chỉ downsample nếu targetWidth nhỏ hơn kích thước gốc
+  // ── Bước 1: Degradation (resize xuống → upsample về gốc) ─────────────────
   let degradedBuffer;
 
   if (targetWidth !== null && targetWidth < origW) {
-    // Tính height tương ứng giữ tỉ lệ
-    const ratio  = targetWidth / origW;
-    const midW   = Math.max(2, targetWidth);
-    const midH   = Math.max(2, Math.round(origH * ratio));
+    const ratio = targetWidth / origW;
+    const midW  = Math.max(2, targetWidth);
+    const midH  = Math.max(2, Math.round(origH * ratio));
 
-    degradedBuffer = await sharp(inputPath)
-      // Bước 1: downsample xuống targetWidth
-      .resize(midW, midH, {
-        kernel: sharp.kernel.nearest,
-        withoutEnlargement: false,
-      })
-      // Bước 2: upsample về kích thước gốc (tạo pixelation/mất chi tiết)
-      .resize(origW, origH, {
-        kernel: sharp.kernel.nearest,
-        withoutEnlargement: false,
-      })
+    // Downsample xuống targetWidth bằng lanczos3 (mất chi tiết thực sự)
+    // rồi upsample về kích thước gốc bằng nearest (tạo pixelation/blocky)
+    // Encode trung gian sang JPEG với quality thấp để "khoá" artifact vào buffer
+    const downBuf = await sharp(inputPath)
+      .resize(midW, midH, { kernel: sharp.kernel.lanczos3 })
+      .jpeg({ quality: jpegQuality, mozjpeg: true })   // encode lossy tại đây
       .toBuffer();
+
+    // Upsample về kích thước gốc
+    degradedBuffer = await sharp(downBuf)
+      .resize(origW, origH, { kernel: sharp.kernel.nearest })
+      .toBuffer();
+
   } else {
-    // Original hoặc preset lớn hơn ảnh gốc → không downsample
+    // Original hoặc preset lớn hơn ảnh — chỉ đọc thẳng
     degradedBuffer = await sharp(inputPath).toBuffer();
   }
 
-  // ── Watermark ─────────────────────────────────────────────────────────────
+  // ── Bước 2: Watermark ─────────────────────────────────────────────────────
   let compositeOptions = [];
 
   if (fs.existsSync(wmPath)) {
@@ -120,7 +111,7 @@ const processImage = async (
     console.warn(`Watermark không tìm thấy: ${wmPath}`);
   }
 
-  // ── Encode output ──────────────────────────────────────────────────────────
+  // ── Bước 3: Composite + encode output ────────────────────────────────────
   let pipeline = sharp(degradedBuffer)
     .composite(compositeOptions)
     .withMetadata({ density: 72 });
@@ -137,11 +128,9 @@ const processImage = async (
     case 'png':
       pipeline = pipeline.png({
         compressionLevel: pngCompression,
-        // Bật palette (giảm bit depth màu) cho các preset thấp
-        palette: pngCompression >= 6,
-        colours: pngCompression >= 6
-          ? Math.max(32, 256 - (pngCompression - 6) * 56)  // 256→32
-          : 256,
+        palette: pngColours < 256,
+        colours: pngColours,
+        dither: pngColours < 128 ? 0.8 : 0,
       });
       break;
 
@@ -150,19 +139,15 @@ const processImage = async (
       break;
 
     default:
-      pipeline = pipeline.jpeg({
-        quality: jpegQuality,
-        progressive: true,
-        mozjpeg: true,
-      });
+      pipeline = pipeline.jpeg({ quality: jpegQuality, mozjpeg: true });
   }
 
   const info = await pipeline.toFile(outputPath);
 
   console.log(
     `[processImage] preset=${resolutionPreset} | ` +
-    `targetWidth=${targetWidth ?? 'original'} (${origW}×${origH}) | ` +
-    `jpegQuality=${jpegQuality} | output=${(info.size / 1024).toFixed(1)} KB`
+    `downsample: ${origW}×${origH} → ${targetWidth ?? origW}px → ${origW}×${origH} | ` +
+    `jpegQ=${jpegQuality} | output=${(info.size / 1024).toFixed(1)} KB`
   );
 
   return {
@@ -171,6 +156,7 @@ const processImage = async (
     processedWidth:  info.width,
     processedHeight: info.height,
     processedSize:   info.size,
+    resolutionPreset,
   };
 };
 

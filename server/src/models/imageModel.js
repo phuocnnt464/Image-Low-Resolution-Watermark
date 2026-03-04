@@ -4,9 +4,7 @@ function toSnakeCase(str) {
   return str.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
 }
 
-// ────────────────────────────────────────────
-// CREATE
-// ────────────────────────────────────────────
+// ── CREATE ─────────────────────────────────────────────────────────────────
 const create = async ({
   id,
   originalFilename,
@@ -17,7 +15,7 @@ const create = async ({
   originalHeight,
   processedWidth,
   processedHeight,
-  scalePercent,
+  resolutionPreset,   // ← thay scalePercent
   watermarkApplied,
   status,
 }) => {
@@ -27,7 +25,7 @@ const create = async ({
       original_size, processed_size,
       original_width, original_height,
       processed_width, processed_height,
-      scale_percent, watermark_applied, status
+      resolution_preset, watermark_applied, status
     ) VALUES (
       $1, $2, $3,
       $4, $5,
@@ -42,15 +40,13 @@ const create = async ({
     originalSize, processedSize,
     originalWidth, originalHeight,
     processedWidth, processedHeight,
-    scalePercent, watermarkApplied, status,
+    resolutionPreset ?? 'FHD', watermarkApplied, status,
   ];
   const { rows } = await pool.query(sql, values);
   return rows[0];
 };
 
-// ────────────────────────────────────────────
-// UPDATE BY ID
-// ────────────────────────────────────────────
+// ── UPDATE BY ID ──────────────────────────────────────────────────────────────
 const updateById = async (id, fields) => {
   const keys   = Object.keys(fields);
   const values = Object.values(fields);
@@ -72,9 +68,7 @@ const updateById = async (id, fields) => {
   return rows[0] || null;
 };
 
-// ────────────────────────────────────────────
-// FIND ALL
-// ────────────────────────────────────────────
+// ── FIND ALL ──────────────────────────────────────────────────────────────────
 const findAll = async (limit = 50) => {
   const { rows } = await pool.query(
     `SELECT * FROM image_processing_history
@@ -85,9 +79,7 @@ const findAll = async (limit = 50) => {
   return rows;
 };
 
-// ────────────────────────────────────────────
-// FIND BY ID
-// ────────────────────────────────────────────
+// ── FIND BY ID ────────────────────────────────────────────────────────────────
 const findById = async (id) => {
   const { rows } = await pool.query(
     `SELECT * FROM image_processing_history WHERE id = $1`,
@@ -96,9 +88,7 @@ const findById = async (id) => {
   return rows[0] || null;
 };
 
-// ────────────────────────────────────────────
-// DELETE BY ID
-// ────────────────────────────────────────────
+// ── DELETE BY ID ──────────────────────────────────────────────────────────────
 const deleteById = async (id) => {
   const { rows } = await pool.query(
     `DELETE FROM image_processing_history WHERE id = $1 RETURNING *`,
@@ -107,9 +97,7 @@ const deleteById = async (id) => {
   return rows[0] || null;
 };
 
-// ────────────────────────────────────────────
-// MARK FAILED
-// ────────────────────────────────────────────
+// ── MARK FAILED ───────────────────────────────────────────────────────────────
 const markFailed = async (id) => {
   const { rows } = await pool.query(
     `UPDATE image_processing_history
@@ -121,14 +109,4 @@ const markFailed = async (id) => {
   return rows[0] || null;
 };
 
-// ────────────────────────────────────────────
-// EXPORT
-// ────────────────────────────────────────────
-module.exports = {
-  create,
-  updateById,
-  findAll,
-  findById,
-  deleteById,
-  markFailed,
-};
+module.exports = { create, updateById, findAll, findById, deleteById, markFailed };

@@ -26,8 +26,7 @@ const processImages = async (req, res) => {
     return res.status(400).json({ message: 'Không có ảnh nào được upload' });
   }
 
-  // Validate preset, fallback về FHD nếu không hợp lệ
-  const rawPreset       = req.body.resolutionPreset || 'FHD';
+  const rawPreset        = req.body.resolutionPreset || 'FHD';
   const resolutionPreset = VALID_PRESETS.includes(rawPreset) ? rawPreset : 'FHD';
   const watermarkPosition = req.body.watermarkPosition || 'bottom-left';
   const inputPaths        = imageFiles.map((f) => f.path);
@@ -59,7 +58,7 @@ const processImages = async (req, res) => {
         originalHeight:    null,
         processedWidth:    null,
         processedHeight:   null,
-        scalePercent:      null,     // không dùng nữa, giữ column tương thích
+        resolutionPreset,          // ← lưu preset thay scalePercent
         watermarkApplied:  hasCustomWatermark,
         status:            'pending',
       });
@@ -68,7 +67,7 @@ const processImages = async (req, res) => {
         const result = await processImage(
           file.path,
           outputPath,
-          resolutionPreset,    // ← truyền preset
+          resolutionPreset,
           watermarkPath,
           watermarkPosition
         );
