@@ -49,7 +49,7 @@ const onDrop = (e) => {
 .uploader {
   border: 2px dashed #94a3b8;
   border-radius: 12px;
-  padding: 48px 10px;
+  padding: 48px 14px;
   text-align: center;
   cursor: pointer;
   transition: all 0.2s;
@@ -61,7 +61,7 @@ const onDrop = (e) => {
   background: #eff6ff;
 }
 .uploader__icon { font-size: 48px; margin-bottom: 12px; }
-.uploader__text { font-size: 16px; color: #475569; margin: 0 0 6px; }
-.uploader__link { color: #3b82f6; font-weight: 600; }
+.uploader__text { font-size: 16px; color: #475569; margin: 0 0 4px; }
+.uploader__link { color: #3b82f6; font-weight: 500; }
 .uploader__hint { font-size: 13px; color: #94a3b8; margin: 0; }
 </style>

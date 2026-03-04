@@ -7,7 +7,7 @@ const DEFAULT_WATERMARK_PATH = process.env.WATERMARK_PATH
   || path.resolve(__dirname, '../../assets/watermark.png');
 
 const WATERMARK_RATIO = 0.15;
-const PADDING         = 10;
+const PADDING         = 15;
 
 /**
  * Tính tọa độ (left, top) của watermark theo vị trí
@@ -85,10 +85,10 @@ const processImage = async (inputPath, outputPath, scalePercent = 50, watermarkP
     .withMetadata({ density: 72 });
 
   switch (format) {
-    case 'jpeg': pipeline = pipeline.jpeg({ quality: 100, mozjpeg: true }); break;
+    case 'jpeg': pipeline = pipeline.jpeg({ quality: 90, mozjpeg: true }); break;
     case 'png':  pipeline = pipeline.png({ compressionLevel: 6, colours: 256 }); break;
-    case 'webp': pipeline = pipeline.webp({ quality: 100 }); break;
-    default:     pipeline = pipeline.jpeg({ quality: 100 });
+    case 'webp': pipeline = pipeline.webp({ quality: 90 }); break;
+    default:     pipeline = pipeline.jpeg({ quality: 90 });
   }
 
   const info = await pipeline.toFile(outputPath);

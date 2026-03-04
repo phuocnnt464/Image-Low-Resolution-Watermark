@@ -75,7 +75,7 @@ const statusLabel = (status) => {
 </script>
 
 <style scoped>
-.history-section { margin-top: 40px; }
+.history-section { margin-top: 20px; }
 .history-header {
   display: flex;
   justify-content: space-between;

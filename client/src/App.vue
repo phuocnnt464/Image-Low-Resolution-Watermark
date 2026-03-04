@@ -50,7 +50,7 @@ body {
 .app-header p  { color: #64748b; font-size: 14px; }
 .app-main {
   max-width: 900px;
-  margin: 32px auto;
+  margin: 30px auto;
   padding: 0 16px;
   display: flex;
   flex-direction: column;
@@ -59,7 +59,7 @@ body {
 .card {
   background: white;
   border-radius: 12px;
-  padding: 24px;
+  padding: 16px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.07);
 }
 </style>
