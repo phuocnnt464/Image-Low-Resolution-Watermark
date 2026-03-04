@@ -7,60 +7,65 @@
       </span>
     </div>
 
-    <div class="wm-body">
-      <div
-        class="wm-drop"
-        :class="{ 'wm-drop--drag': isDragging, 'wm-drop--has': !!store.watermarkFile }"
-        @dragover.prevent="isDragging = true"
-        @dragleave.prevent="isDragging = false"
-        @drop.prevent="onDrop"
-        @click="inputRef?.click()"
-      >
-        <input
-          ref="inputRef"
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          style="display:none"
-          @change="onFileChange"
-        />
-        <template v-if="!store.watermarkFile">
-          <div class="wm-drop__icon">🏷️</div>
-          <p class="wm-drop__text">Kéo thả hoặc <span class="wm-drop__link">chọn logo/watermark</span></p>
-          <p class="wm-drop__hint">Nếu không upload, watermark mặc định sẽ được dùng</p>
-        </template>
-        <template v-else>
-          <img :src="store.watermarkUrl" class="wm-drop__preview" alt="Watermark preview" />
-          <p class="wm-drop__name">{{ store.watermarkFile.name }}</p>
-        </template>
-      </div>
+    <div class="wm-controls-row">
 
-      <button
-        v-if="store.watermarkFile"
-        class="wm-clear"
-        @click.stop="store.clearWatermark()"
-      >
-        🗑 Dùng watermark mặc định
-      </button>
-    </div>
+      <!-- 2/3 trái: drop zone + clear button -->
+      <div class="wm-body">
+        <div
+          class="wm-drop"
+          :class="{ 'wm-drop--drag': isDragging, 'wm-drop--has': !!store.watermarkFile }"
+          @dragover.prevent="isDragging = true"
+          @dragleave.prevent="isDragging = false"
+          @drop.prevent="onDrop"
+          @click="inputRef?.click()"
+        >
+          <input
+            ref="inputRef"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            style="display:none"
+            @change="onFileChange"
+          />
+          <template v-if="!store.watermarkFile">
+            <div class="wm-drop__icon">🏷️</div>
+            <p class="wm-drop__text">Kéo thả hoặc <span class="wm-drop__link">chọn logo/watermark</span></p>
+            <p class="wm-drop__hint">Nếu không upload, watermark mặc định sẽ được dùng</p>
+          </template>
+          <template v-else>
+            <img :src="store.watermarkUrl" class="wm-drop__preview" alt="Watermark preview" />
+            <p class="wm-drop__name">{{ store.watermarkFile.name }}</p>
+          </template>
+        </div>
 
-    <!-- ── Chọn vị trí watermark ── -->
-    <div class="wm-position-section">
-      <p class="wm-position-label">📍 Vị trí watermark:</p>
-      <div class="wm-position-grid">
         <button
-          v-for="pos in positionGrid"
-          :key="pos.value"
-          class="wm-pos-btn"
-          :class="{ 'wm-pos-btn--active': store.watermarkPosition === pos.value }"
-          :title="pos.label"
-          @click="store.watermarkPosition = pos.value"
-        >{{ pos.icon }}</button>
+          v-if="store.watermarkFile"
+          class="wm-clear"
+          @click.stop="store.clearWatermark()"
+        >
+          🗑 Dùng watermark mặc định
+        </button>
       </div>
-      <p class="wm-position-name">{{ currentPositionLabel }}</p>
+
+      <!-- 1/3 phải: chọn vị trí watermark -->
+      <div class="wm-position-section">
+        <p class="wm-position-label">📍 Vị trí:</p>
+        <div class="wm-position-grid">
+          <button
+            v-for="pos in positionGrid"
+            :key="pos.value"
+            class="wm-pos-btn"
+            :class="{ 'wm-pos-btn--active': store.watermarkPosition === pos.value }"
+            :title="pos.label"
+            @click="store.watermarkPosition = pos.value"
+          >{{ pos.icon }}</button>
+        </div>
+        <p class="wm-position-name">{{ currentPositionLabel }}</p>
+      </div>
+
     </div>
+
 
     <!-- Preview ảnh đã chèn watermark (Canvas) -->
-    <!-- ← bỏ điều kiện && store.watermarkUrl, chỉ cần có ảnh là show -->
     <div v-if="store.selectedFiles.length > 0" class="wm-preview-section">
       <div class="wm-preview-header">
         <p class="wm-preview-title">👁 Preview ảnh với watermark:</p>
@@ -251,43 +256,58 @@ watch(
 .wm-badge--default { background: #f1f5f9; color: #64748b; }
 .wm-badge--custom  { background: #dbeafe; color: #2563eb; }
 
+/* ── Layout hàng ngang: drop (2/3) + position (1/3) ── */
+.wm-controls-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.wm-body {
+  flex: 2;          /* 2/3 */
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .wm-drop {
   border: 2px dashed #cbd5e1;
   border-radius: 8px;
-  padding: 20px;
+  padding: 16px 12px;
   text-align: center;
   cursor: pointer;
   transition: all 0.2s;
   background: white;
-  min-height: 90px;
+  min-height: 120px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  flex: 1;
 }
 .wm-drop:hover, .wm-drop--drag { border-color: #3b82f6; background: #eff6ff; }
 .wm-drop--has { border-style: solid; border-color: #3b82f6; }
 
-.wm-drop__icon { font-size: 28px; margin-bottom: 6px; }
-.wm-drop__text { font-size: 13px; color: #475569; margin: 0 0 4px; }
+.wm-drop__icon { font-size: 24px; margin-bottom: 4px; }
+.wm-drop__text { font-size: 12px; color: #475569; margin: 0 0 3px; }
 .wm-drop__link { color: #3b82f6; font-weight: 600; }
 .wm-drop__hint { font-size: 11px; color: #94a3b8; margin: 0; }
 .wm-drop__preview {
-  max-height: 60px;
-  max-width: 120px;
+  max-height: 52px;
+  max-width: 100px;
   object-fit: contain;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 .wm-drop__name { font-size: 11px; color: #64748b; margin: 0; }
 
 .wm-clear {
-  margin-top: 8px;
+  margin-top: 6px;
   width: 100%;
   background: transparent;
   border: 1px solid #fca5a5;
   color: #ef4444;
   border-radius: 6px;
-  padding: 6px;
+  padding: 5px;
   font-size: 12px;
   cursor: pointer;
   transition: background 0.2s;
@@ -296,31 +316,36 @@ watch(
 
 /* ── Position picker ── */
 .wm-position-section {
-  margin-top: 14px;
+  flex: 1;
+  min-width: 0;
   padding: 12px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 .wm-position-label {
   font-size: 12px;
   color: #475569;
   margin: 0 0 8px;
+  align-self: flex-start;
 }
 .wm-position-grid {
   display: grid;
-  grid-template-columns: repeat(3, 32px);
-  grid-template-rows: repeat(3, 32px);
-  gap: 4px;
+  grid-template-columns: repeat(3, 28px);
+  grid-template-rows: repeat(3, 28px);
+  gap: 3px;
   width: fit-content;
 }
 .wm-pos-btn {
-  width: 32px; height: 32px;
+  width: 28px; height: 28px;
   border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  border-radius: 5px;
   background: white;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   display: flex; align-items: center; justify-content: center;
   transition: all 0.15s;
   padding: 0;
@@ -337,6 +362,7 @@ watch(
   font-size: 11px;
   color: #3b82f6;
   font-weight: 600;
+  text-align: center;
 }
 
 /* ── Preview section ── */
@@ -386,6 +412,7 @@ watch(
 .wm-canvas {
   max-width: 100%;
   border-radius: 6px;
+  margin: 0 auto;
   border: 1px solid #e2e8f0;
   display: block;
 }

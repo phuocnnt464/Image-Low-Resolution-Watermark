@@ -49,7 +49,7 @@ const onDrop = (e) => {
 .uploader {
   border: 2px dashed #94a3b8;
   border-radius: 12px;
-  padding: 48px 24px;
+  padding: 48px 10px;
   text-align: center;
   cursor: pointer;
   transition: all 0.2s;
