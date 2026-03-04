@@ -13,7 +13,6 @@ app.use(cors());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-// Serve file tĩnh từ thư mục assets (để client load watermark mặc định cho canvas preview)
 app.use('/assets', express.static(path.resolve(__dirname, 'assets')));
 
 // Routes

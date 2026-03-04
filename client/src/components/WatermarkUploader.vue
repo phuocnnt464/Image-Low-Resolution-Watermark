@@ -1,7 +1,7 @@
 <template>
   <div class="wm-section">
     <div class="wm-header">
-      <h3>💧 Watermark</h3>
+      <h3>Logo Optional</h3>
       <span class="wm-badge" :class="store.watermarkFile ? 'wm-badge--custom' : 'wm-badge--default'">
         {{ store.watermarkFile ? 'Tùy chỉnh' : 'Mặc định' }}
       </span>
@@ -9,7 +9,6 @@
 
     <div class="wm-controls-row">
 
-      <!-- 2/3 trái: drop zone + clear button -->
       <div class="wm-body">
         <div
           class="wm-drop"
@@ -28,8 +27,8 @@
           />
           <template v-if="!store.watermarkFile">
             <div class="wm-drop__icon">🏷️</div>
-            <p class="wm-drop__text">Kéo thả hoặc <span class="wm-drop__link">chọn logo/watermark</span></p>
-            <p class="wm-drop__hint">Nếu không upload, watermark mặc định sẽ được dùng</p>
+            <p class="wm-drop__text">Kéo thả hoặc <span class="wm-drop__link">chọn logo</span></p>
+            <p class="wm-drop__hint">Nếu không upload, logo mặc định sẽ được dùng</p>
           </template>
           <template v-else>
             <img :src="store.watermarkUrl" class="wm-drop__preview" alt="Watermark preview" />
@@ -42,7 +41,7 @@
           class="wm-clear"
           @click.stop="store.clearWatermark()"
         >
-          🗑 Dùng watermark mặc định
+          🗑 Dùng Logo mặc định
         </button>
       </div>
 
@@ -65,10 +64,10 @@
     </div>
 
 
-    <!-- Preview ảnh đã chèn watermark (Canvas) -->
+    <!-- Preview ảnh đã chèn logo (Canvas) -->
     <div v-if="store.selectedFiles.length > 0" class="wm-preview-section">
       <div class="wm-preview-header">
-        <p class="wm-preview-title">👁 Preview ảnh với watermark:</p>
+        <p class="wm-preview-title">👁 Preview ảnh với Logo:</p>
         <div class="wm-preview-nav">
           <button
             class="wm-nav-btn"

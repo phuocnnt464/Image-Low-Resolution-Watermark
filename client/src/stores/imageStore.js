@@ -110,7 +110,7 @@ export const useImageStore = defineStore('image', () => {
 
   return {
     selectedFiles, previewUrls, isProcessing, history, errorMessage,
-    resolutionPreset,                           // ← export preset
+    resolutionPreset,                           
     watermarkFile, watermarkUrl, watermarkPosition,
     setWatermark, clearWatermark,
     addFiles, removeFile, clearFiles,
