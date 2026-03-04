@@ -10,23 +10,26 @@ const WATERMARK_RATIO = 0.15;
 const PADDING         = 15;
 
 /**
- * Bảng preset
- * targetWidth : resize ảnh xuống width này (giữ tỉ lệ), rồi upsample về origW×origH
- *               null = không downsample, chỉ encode lại với quality cao
- * jpegQuality : quality encode JPEG / WebP
- * pngColours  : số màu palette PNG (256 = full, <256 = giảm bit depth màu)
- * pngCompression: mức nén zlib PNG (1–9)
+ * Bảng preset — theo đúng mẫu mẫu generateProMatrix:
+ *
+ *   targetWidth : resize ảnh về đúng width này (withoutEnlargement: true)
+ *                 null = giữ nguyên kích thước gốc (Original)
+ *   jpegQuality : quality JPEG/WebP output — giữ 100 để không mất thêm, hoặc giảm nhẹ
+ *
+ * Khác với cách cũ (down→up), lần này output sẽ CÓ kích thước nhỏ hơn thật sự
+ * → file nhỏ hơn, resolution thấp hơn, rõ ràng khi xem thuộc tính ảnh.
+ *
+ * Nếu ảnh gốc nhỏ hơn targetWidth → withoutEnlargement giữ nguyên kích thước gốc.
  */
 const RESOLUTION_PRESETS = {
-  //             targetWidth  jpegQ  webpQ  pngColours  pngComp
-  'Original': { targetWidth: null, jpegQuality: 92, webpQuality: 92, pngColours: 256, pngCompression: 1 },
-  '4K':       { targetWidth: 3840, jpegQuality: 85, webpQuality: 85, pngColours: 256, pngCompression: 2 },
-  'QHD':      { targetWidth: 2560, jpegQuality: 78, webpQuality: 78, pngColours: 256, pngCompression: 4 },
-  'FHD':      { targetWidth: 1920, jpegQuality: 70, webpQuality: 70, pngColours: 256, pngCompression: 5 },
-  'HD':       { targetWidth: 1280, jpegQuality: 60, webpQuality: 60, pngColours: 128, pngCompression: 6 },
-  'SD':       { targetWidth: 854,  jpegQuality: 48, webpQuality: 48, pngColours: 64,  pngCompression: 7 },
-  'LD':       { targetWidth: 480,  jpegQuality: 35, webpQuality: 35, pngColours: 32,  pngCompression: 8 },
-  'Tiny':     { targetWidth: 240,  jpegQuality: 20, webpQuality: 20, pngColours: 16,  pngCompression: 9 },
+  'Original': { targetWidth: null,  jpegQuality: 100, webpQuality: 100, pngCompression: 1 },
+  '4K':       { targetWidth: 3840,  jpegQuality: 100, webpQuality: 100, pngCompression: 1 },
+  'QHD':      { targetWidth: 2560,  jpegQuality: 100, webpQuality: 100, pngCompression: 2 },
+  'FHD':      { targetWidth: 1920,  jpegQuality: 100, webpQuality: 100, pngCompression: 3 },
+  'HD':       { targetWidth: 1280,  jpegQuality: 100, webpQuality: 100, pngCompression: 4 },
+  'SD':       { targetWidth: 854,   jpegQuality: 100, webpQuality: 100, pngCompression: 5 },
+  'LD':       { targetWidth: 480,   jpegQuality: 100, webpQuality: 100, pngCompression: 6 },
+  'Tiny':     { targetWidth: 240,   jpegQuality: 100, webpQuality: 100, pngCompression: 7 },
 }
 
 const calcPosition = (position, origW, origH, wmW, wmH, padding) => {
@@ -47,6 +50,13 @@ const calcPosition = (position, origW, origH, wmW, wmH, padding) => {
   return { left: Math.max(0, pos.left), top: Math.max(0, pos.top) }
 }
 
+/**
+ * @param {string} inputPath
+ * @param {string} outputPath
+ * @param {string} resolutionPreset  - 'Original'|'4K'|'QHD'|'FHD'|'HD'|'SD'|'LD'|'Tiny'
+ * @param {string|null} watermarkPath
+ * @param {string} watermarkPosition
+ */
 const processImage = async (
   inputPath,
   outputPath,
@@ -61,42 +71,35 @@ const processImage = async (
   const origH  = meta.height;
   const format = meta.format;
 
-  // ── Tham số preset ────────────────────────────────────────────────────────
+  // ── Tham số preset ─────────────────────────────────────────────────────────
   const preset = RESOLUTION_PRESETS[resolutionPreset] ?? RESOLUTION_PRESETS['FHD'];
-  const { targetWidth, jpegQuality, webpQuality, pngColours, pngCompression } = preset;
+  const { targetWidth, jpegQuality, webpQuality, pngCompression } = preset;
 
-  // ── Bước 1: Degradation (resize xuống → upsample về gốc) ─────────────────
-  let degradedBuffer;
+  // ── Bước 1: Resize xuống targetWidth (giữ tỉ lệ, không phóng to) ──────────
+  // Đây là pipeline chính, output SẼ CÓ kích thước nhỏ hơn nếu targetWidth < origW
+  let pipeline = sharp(inputPath);
 
-  if (targetWidth !== null && targetWidth < origW) {
-    const ratio = targetWidth / origW;
-    const midW  = Math.max(2, targetWidth);
-    const midH  = Math.max(2, Math.round(origH * ratio));
-
-    // Downsample xuống targetWidth bằng lanczos3 (mất chi tiết thực sự)
-    // rồi upsample về kích thước gốc bằng nearest (tạo pixelation/blocky)
-    // Encode trung gian sang JPEG với quality thấp để "khoá" artifact vào buffer
-    const downBuf = await sharp(inputPath)
-      .resize(midW, midH, { kernel: sharp.kernel.lanczos3 })
-      .jpeg({ quality: jpegQuality, mozjpeg: true })   // encode lossy tại đây
-      .toBuffer();
-
-    // Upsample về kích thước gốc
-    degradedBuffer = await sharp(downBuf)
-      .resize(origW, origH, { kernel: sharp.kernel.nearest })
-      .toBuffer();
-
-  } else {
-    // Original hoặc preset lớn hơn ảnh — chỉ đọc thẳng
-    degradedBuffer = await sharp(inputPath).toBuffer();
+  if (targetWidth !== null) {
+    pipeline = pipeline.resize({
+      width: targetWidth,
+      withoutEnlargement: true,   // nếu ảnh gốc nhỏ hơn targetWidth → giữ nguyên
+      kernel: sharp.kernel.lanczos3,
+    });
   }
+  // targetWidth === null (Original) → không resize, giữ kích thước gốc
 
-  // ── Bước 2: Watermark ─────────────────────────────────────────────────────
+  // ── Bước 2: Lấy metadata sau resize để tính vị trí watermark ──────────────
+  // Cần biết kích thước thực tế sau resize để đặt watermark đúng chỗ
+  const resizedBuffer = await pipeline.toBuffer({ resolveWithObject: true });
+  const resW = resizedBuffer.info.width;
+  const resH = resizedBuffer.info.height;
+
+  // ── Bước 3: Watermark (scale theo kích thước sau resize) ───────────────────
   let compositeOptions = [];
 
   if (fs.existsSync(wmPath)) {
     const wmMeta  = await sharp(wmPath).metadata();
-    const wmMaxW  = Math.round(origW * WATERMARK_RATIO);
+    const wmMaxW  = Math.round(resW * WATERMARK_RATIO);
     const wmScale = Math.min(1, wmMaxW / wmMeta.width);
     const wmW     = Math.max(1, Math.round(wmMeta.width  * wmScale));
     const wmH     = Math.max(1, Math.round(wmMeta.height * wmScale));
@@ -105,49 +108,55 @@ const processImage = async (
       .resize(wmW, wmH, { kernel: sharp.kernel.lanczos3 })
       .toBuffer();
 
-    const { left, top } = calcPosition(watermarkPosition, origW, origH, wmW, wmH, PADDING);
+    const { left, top } = calcPosition(watermarkPosition, resW, resH, wmW, wmH, PADDING);
     compositeOptions = [{ input: watermarkBuffer, left, top }];
   } else {
     console.warn(`Watermark không tìm thấy: ${wmPath}`);
   }
 
-  // ── Bước 3: Composite + encode output ────────────────────────────────────
-  let pipeline = sharp(degradedBuffer)
+  // ── Bước 4: Composite + encode output với quality 100% ─────────────────────
+  let outputPipeline = sharp(resizedBuffer.data)
     .composite(compositeOptions)
-    .withMetadata({ density: 72 });
+    .withMetadata();   // giữ toàn bộ EXIF/metadata gốc
 
   switch (format) {
     case 'jpeg':
-      pipeline = pipeline.jpeg({
-        quality: jpegQuality,
+      outputPipeline = outputPipeline.jpeg({
+        quality: jpegQuality,       // 100 = không nén thêm
         progressive: true,
         mozjpeg: true,
       });
       break;
 
     case 'png':
-      pipeline = pipeline.png({
+      outputPipeline = outputPipeline.png({
         compressionLevel: pngCompression,
-        palette: pngColours < 256,
-        colours: pngColours,
-        dither: pngColours < 128 ? 0.8 : 0,
+        // Không dùng palette — giữ full bit depth (không giảm màu)
+        palette: false,
       });
       break;
 
     case 'webp':
-      pipeline = pipeline.webp({ quality: webpQuality });
+      outputPipeline = outputPipeline.webp({
+        quality: webpQuality,       // 100 = lossless-like
+        lossless: jpegQuality === 100,
+      });
       break;
 
     default:
-      pipeline = pipeline.jpeg({ quality: jpegQuality, mozjpeg: true });
+      outputPipeline = outputPipeline.jpeg({
+        quality: jpegQuality,
+        progressive: true,
+        mozjpeg: true,
+      });
   }
 
-  const info = await pipeline.toFile(outputPath);
+  const info = await outputPipeline.toFile(outputPath);
 
   console.log(
     `[processImage] preset=${resolutionPreset} | ` +
-    `downsample: ${origW}×${origH} → ${targetWidth ?? origW}px → ${origW}×${origH} | ` +
-    `jpegQ=${jpegQuality} | output=${(info.size / 1024).toFixed(1)} KB`
+    `${origW}×${origH} → ${info.width}×${info.height} | ` +
+    `quality=${jpegQuality} | output=${(info.size / 1024).toFixed(1)} KB`
   );
 
   return {
