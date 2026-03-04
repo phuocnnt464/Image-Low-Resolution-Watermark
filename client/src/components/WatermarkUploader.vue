@@ -45,7 +45,6 @@
 
     <!-- Preview ảnh đã chèn watermark (Canvas) -->
     <div v-if="store.selectedFiles.length > 0 && store.watermarkUrl" class="wm-preview-section">
-      <!-- Header + navigation -->
       <div class="wm-preview-header">
         <p class="wm-preview-title">👁 Preview ảnh với watermark:</p>
         <div class="wm-preview-nav">
@@ -97,7 +96,7 @@ const drawPreview = async () => {
   const canvas = canvasRef.value
   if (!canvas) return
 
-  const imgUrl = store.previewUrls[currentIndex.value]  // ← dùng currentIndex
+  const imgUrl = store.previewUrls[currentIndex.value]  
   const wmUrl  = store.watermarkUrl
   if (!imgUrl || !wmUrl) return
 
@@ -146,13 +145,18 @@ const drawPreview = async () => {
   ctx.drawImage(wm, left, top, wmW, wmH)
 }
 
-// Vẽ lại khi đổi watermark, đổi ảnh upload, hoặc chuyển index
+// Vẽ lại khi đổi watermark hoặc danh sách ảnh thay đổi
 watch(
-  () => [store.watermarkUrl, store.previewUrls[currentIndex.value], currentIndex.value],
-  ([newWmUrl, newImgUrl]) => {
-    if (newWmUrl && newImgUrl) drawPreview()
+  () => [store.watermarkUrl, store.previewUrls.length],
+  ([newWmUrl]) => {
+    if (newWmUrl && store.previewUrls.length > 0) drawPreview()
   }
 )
+
+// Vẽ lại khi chuyển index
+watch(currentIndex, () => {
+  if (store.watermarkUrl && store.previewUrls[currentIndex.value]) drawPreview()
+})
 
 // Reset index về 0 nếu xóa bớt ảnh và index vượt quá
 watch(
