@@ -99,9 +99,9 @@ const positions = [
   { value: 'top-left',      label: 'Trên trái',      icon: '↖' },
   { value: 'top-center',    label: 'Trên giữa',      icon: '↑' },
   { value: 'top-right',     label: 'Trên phải',      icon: '↗' },
-  { value: 'center',        label: 'Giữa',           icon: '⊙' },
-  { value: 'center',        label: 'Giữa',           icon: '⊙' }, // placeholder để giữ layout 3x3
-  { value: 'center',        label: 'Giữa',           icon: '⊙' }, // placeholder
+  { value: 'center-left',   label: 'Giữa trái',      icon: '←' },
+  { value: 'center',        label: 'Giữa',           icon: '⊙' }, 
+  { value: 'center-right',  label: 'Giữa phải',      icon: '→' }, 
   { value: 'bottom-left',   label: 'Dưới trái',      icon: '↙' },
   { value: 'bottom-center', label: 'Dưới giữa',      icon: '↓' },
   { value: 'bottom-right',  label: 'Dưới phải',      icon: '↘' },
