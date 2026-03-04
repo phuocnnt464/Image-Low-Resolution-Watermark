@@ -1,7 +1,7 @@
 <template>
   <div class="app">
     <header class="app-header">
-      <h1>🖼️ Image Watermark & Compress</h1>
+      <h1>Image Watermark & Compress</h1>
       <p>Upload ảnh, giảm resolution và chèn watermark tự động</p>
     </header>
 
