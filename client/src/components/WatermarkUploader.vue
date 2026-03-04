@@ -48,7 +48,7 @@
       <p class="wm-position-label">📍 Vị trí watermark:</p>
       <div class="wm-position-grid">
         <button
-          v-for="pos in positions"
+          v-for="pos in positionGrid"
           :key="pos.value"
           class="wm-pos-btn"
           :class="{ 'wm-pos-btn--active': store.watermarkPosition === pos.value }"
@@ -60,7 +60,8 @@
     </div>
 
     <!-- Preview ảnh đã chèn watermark (Canvas) -->
-    <div v-if="store.selectedFiles.length > 0 && store.watermarkUrl" class="wm-preview-section">
+    <!-- ← bỏ điều kiện && store.watermarkUrl, chỉ cần có ảnh là show -->
+    <div v-if="store.selectedFiles.length > 0" class="wm-preview-section">
       <div class="wm-preview-header">
         <p class="wm-preview-title">👁 Preview ảnh với watermark:</p>
         <div class="wm-preview-nav">
@@ -95,19 +96,6 @@ const isDragging = ref(false)
 const currentIndex = ref(0)
 
 // ── Danh sách vị trí ─────────────────────────────────────────────────────
-const positions = [
-  { value: 'top-left',      label: 'Trên trái',      icon: '↖' },
-  { value: 'top-center',    label: 'Trên giữa',      icon: '↑' },
-  { value: 'top-right',     label: 'Trên phải',      icon: '↗' },
-  { value: 'center-left',   label: 'Giữa trái',      icon: '←' },
-  { value: 'center',        label: 'Giữa',           icon: '⊙' }, 
-  { value: 'center-right',  label: 'Giữa phải',      icon: '→' }, 
-  { value: 'bottom-left',   label: 'Dưới trái',      icon: '↙' },
-  { value: 'bottom-center', label: 'Dưới giữa',      icon: '↓' },
-  { value: 'bottom-right',  label: 'Dưới phải',      icon: '↘' },
-]
-
-// Layout đúng: 3 hàng × 3 cột
 const positionGrid = [
   { value: 'top-left',      label: 'Trên trái',  icon: '↖' },
   { value: 'top-center',    label: 'Trên giữa',  icon: '↑' },
@@ -140,22 +128,29 @@ const onDrop = (e) => {
 const calcWmPosition = (position, canvasW, canvasH, wmW, wmH, padding) => {
   const cx = Math.round((canvasW - wmW) / 2)
   const cy = Math.round((canvasH - wmH) / 2)
-
   const map = {
-    'top-left':      { left: padding,               top: padding },
-    'top-center':    { left: cx,                    top: padding },
+    'top-left':      { left: padding,                top: padding },
+    'top-center':    { left: cx,                     top: padding },
     'top-right':     { left: canvasW - wmW - padding, top: padding },
-    'center-left':   { left: padding,               top: cy },
-    'center':        { left: cx,                    top: cy },
+    'center-left':   { left: padding,                top: cy },
+    'center':        { left: cx,                     top: cy },
     'center-right':  { left: canvasW - wmW - padding, top: cy },
-    'bottom-left':   { left: padding,               top: canvasH - wmH - padding },
-    'bottom-center': { left: cx,                    top: canvasH - wmH - padding },
+    'bottom-left':   { left: padding,                top: canvasH - wmH - padding },
+    'bottom-center': { left: cx,                     top: canvasH - wmH - padding },
     'bottom-right':  { left: canvasW - wmW - padding, top: canvasH - wmH - padding },
   }
-
   const pos = map[position] || map['bottom-left']
   return { left: Math.max(0, pos.left), top: Math.max(0, pos.top) }
 }
+
+// Load ảnh dưới dạng HTMLImageElement (hỗ trợ cả object URL và URL thông thường)
+const loadImage = (src) => new Promise((resolve, reject) => {
+  const img = new Image()
+  img.crossOrigin = 'anonymous'
+  img.onload  = () => resolve(img)
+  img.onerror = reject
+  img.src = src
+})
 
 const drawPreview = async () => {
   await nextTick()
@@ -164,58 +159,63 @@ const drawPreview = async () => {
   if (!canvas) return
 
   const imgUrl = store.previewUrls[currentIndex.value]
-  const wmUrl  = store.watermarkUrl
-  if (!imgUrl || !wmUrl) return
+  if (!imgUrl) return
 
-  const ctx = canvas.getContext('2d')
+  // Dùng watermark custom nếu có, ngược lại dùng file mặc định từ server
+  const wmUrl = store.watermarkUrl || '/assets/watermark.png'
 
-  const img = new Image()
-  img.crossOrigin = 'anonymous'
-  img.src = imgUrl
-  await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject })
+  try {
+    const ctx = canvas.getContext('2d')
 
-  const maxW  = 600
-  const scale = Math.min(1, maxW / img.naturalWidth)
-  const dispW = Math.round(img.naturalWidth  * scale)
-  const dispH = Math.round(img.naturalHeight * scale)
+    const img = await loadImage(imgUrl)
 
-  canvas.width  = dispW
-  canvas.height = dispH
-  ctx.drawImage(img, 0, 0, dispW, dispH)
+    const maxW  = 600
+    const scale = Math.min(1, maxW / img.naturalWidth)
+    const dispW = Math.round(img.naturalWidth  * scale)
+    const dispH = Math.round(img.naturalHeight * scale)
 
-  const wm = new Image()
-  wm.crossOrigin = 'anonymous'
-  wm.src = wmUrl
-  await new Promise((resolve, reject) => { wm.onload = resolve; wm.onerror = reject })
+    canvas.width  = dispW
+    canvas.height = dispH
+    ctx.drawImage(img, 0, 0, dispW, dispH)
 
-  const wmMaxW  = Math.round(dispW * 0.15)
-  const wmScale = wmMaxW / wm.naturalWidth
-  const wmW     = Math.round(wm.naturalWidth  * wmScale)
-  const wmH     = Math.round(wm.naturalHeight * wmScale)
+    const wm = await loadImage(wmUrl)
 
-  const padding = Math.max(8, Math.round(15 * scale))
-  const { left, top } = calcWmPosition(store.watermarkPosition, dispW, dispH, wmW, wmH, padding)
+    const wmMaxW  = Math.round(dispW * 0.15)
+    const wmScale = wmMaxW / wm.naturalWidth
+    const wmW     = Math.round(wm.naturalWidth  * wmScale)
+    const wmH     = Math.round(wm.naturalHeight * wmScale)
 
-  ctx.drawImage(wm, left, top, wmW, wmH)
+    const padding = Math.max(8, Math.round(15 * scale))
+    const { left, top } = calcWmPosition(store.watermarkPosition, dispW, dispH, wmW, wmH, padding)
+
+    ctx.drawImage(wm, left, top, wmW, wmH)
+  } catch (err) {
+    console.error('drawPreview error:', err)
+  }
 }
 
-// Vẽ lại khi đổi watermark hoặc danh sách ảnh thay đổi
+// Vẽ lại khi danh sách ảnh thay đổi
 watch(
-  () => [store.watermarkUrl, store.previewUrls.length],
-  ([newWmUrl]) => {
-    if (newWmUrl && store.previewUrls.length > 0) drawPreview()
-  }
+  () => store.previewUrls.length,
+  (len) => { if (len > 0) drawPreview() }
 )
 
-// Vẽ lại khi chuyển index
+// Vẽ lại khi đổi watermark custom (hoặc xóa watermark → dùng mặc định)
+watch(
+  () => store.watermarkUrl,
+  () => { if (store.previewUrls[currentIndex.value]) drawPreview() }
+)
+
+// Vẽ lại khi chuyển ảnh
 watch(currentIndex, () => {
-  if (store.watermarkUrl && store.previewUrls[currentIndex.value]) drawPreview()
+  if (store.previewUrls[currentIndex.value]) drawPreview()
 })
 
 // Vẽ lại khi đổi vị trí
-watch(() => store.watermarkPosition, () => {
-  if (store.watermarkUrl && store.previewUrls[currentIndex.value]) drawPreview()
-})
+watch(
+  () => store.watermarkPosition,
+  () => { if (store.previewUrls[currentIndex.value]) drawPreview() }
+)
 
 // Reset index nếu xóa ảnh
 watch(

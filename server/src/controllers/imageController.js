@@ -15,7 +15,7 @@ const cleanupFiles = (paths) => {
   });
 };
 
-// ─── POST /api/images/process ────────────────────────────────────────────────
+// ─── POST /api/images/process ──────────────────��─────────────────────────────
 const processImages = async (req, res) => {
   const imageFiles     = req.files?.['images']    || [];
   const watermarkFiles = req.files?.['watermark'] || [];
@@ -24,8 +24,9 @@ const processImages = async (req, res) => {
     return res.status(400).json({ message: 'Không có ảnh nào được upload' });
   }
 
-  const scalePercent  = Math.min(100, Math.max(1, parseInt(req.body.scalePercent) || 50));
-  const inputPaths    = imageFiles.map((f) => f.path);
+  const scalePercent       = Math.min(100, Math.max(1, parseInt(req.body.scalePercent) || 50));
+  const watermarkPosition  = req.body.watermarkPosition || 'bottom-left';  // ← thêm dòng này
+  const inputPaths         = imageFiles.map((f) => f.path);
 
   const hasCustomWatermark = watermarkFiles.length > 0;
   const watermarkPath = hasCustomWatermark
@@ -34,6 +35,7 @@ const processImages = async (req, res) => {
 
   console.log(`watermark: ${hasCustomWatermark ? `custom → ${watermarkFiles[0]?.originalname}` : `default → ${DEFAULT_WATERMARK}`}`);
   console.log(`default watermark exists: ${fs.existsSync(DEFAULT_WATERMARK)}`);
+  console.log(`watermark position: ${watermarkPosition}`);
 
   const processedPaths = [];
 
@@ -60,7 +62,8 @@ const processImages = async (req, res) => {
       });
 
       try {
-        const result = await processImage(file.path, outputPath, scalePercent, watermarkPath);
+        // ← truyền thêm watermarkPosition
+        const result = await processImage(file.path, outputPath, scalePercent, watermarkPath, watermarkPosition);
         processedPaths.push(outputPath);
 
         await ImageModel.updateById(id, {
