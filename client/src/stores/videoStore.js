@@ -3,15 +3,14 @@ import { ref } from 'vue'
 import axios from 'axios'
 
 export const useVideoStore = defineStore('video', () => {
-  const selectedFile     = ref(null)       // File object
-  const previewUrl       = ref('')          // object URL cho <video>
-  const isProcessing     = ref(false)
-  const errorMessage     = ref('')
-  const bitratePreset    = ref('720p')
-  const watermarkFile    = ref(null)
-  const watermarkUrl     = ref('')
+  const selectedFile      = ref(null)
+  const previewUrl        = ref('')
+  const isProcessing      = ref(false)
+  const errorMessage      = ref('')
+  const bitratePreset     = ref('720p')
+  const watermarkFile     = ref(null)
+  const watermarkUrl      = ref('')
   const watermarkPosition = ref('bottom-left')
-  const progress         = ref(0)           // 0–100
 
   const setVideo = (file) => {
     if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
@@ -37,11 +36,12 @@ export const useVideoStore = defineStore('video', () => {
     }
   }
 
+  const clearWatermark = () => setWatermark(null)
+
   const processAndDownload = async () => {
     if (!selectedFile.value) return
     isProcessing.value = true
     errorMessage.value = ''
-    progress.value     = 0
 
     try {
       const formData = new FormData()
@@ -53,12 +53,7 @@ export const useVideoStore = defineStore('video', () => {
       const response = await axios.post('/api/videos/process', formData, {
         responseType: 'blob',
         timeout: 30 * 60 * 1000, // 30 phút cho video lớn
-        onUploadProgress: (evt) => {
-          if (evt.total) progress.value = Math.round(evt.loaded / evt.total * 40)
-        },
       })
-
-      progress.value = 100
 
       const disposition = response.headers['content-disposition']
       let filename = `watermarked-video.mp4`
@@ -94,8 +89,8 @@ export const useVideoStore = defineStore('video', () => {
 
   return {
     selectedFile, previewUrl, isProcessing, errorMessage,
-    bitratePreset, watermarkFile, watermarkUrl, watermarkPosition, progress,
-    setVideo, clearVideo, setWatermark,
+    bitratePreset, watermarkFile, watermarkUrl, watermarkPosition,
+    setVideo, clearVideo, setWatermark, clearWatermark,
     processAndDownload,
   }
 })
