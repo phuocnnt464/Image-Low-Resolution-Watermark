@@ -9,12 +9,6 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 const DEFAULT_WATERMARK_PATH = process.env.WATERMARK_PATH
   || path.resolve(__dirname, '../../assets/watermark.png');
 
-/**
- * Bảng preset bitrate
- * videoBitrate : null = giữ nguyên, string = '8000k', '4000k',...
- * audioBitrate : null = giữ nguyên, string = '192k', '128k',...
- * scale        : null = giữ nguyên kích thước, number = max width (height tự scale)
- */
 const VIDEO_PRESETS = {
   'Original': { videoBitrate: null,     audioBitrate: null,   scale: null  },
   '4K':       { videoBitrate: '20000k', audioBitrate: '320k', scale: 3840  },
@@ -25,15 +19,6 @@ const VIDEO_PRESETS = {
   '240p':     { videoBitrate: '500k',   audioBitrate: '48k',  scale: 426   },
 };
 
-/**
- * @param {string} inputPath
- * @param {string} outputPath        - phải là .mp4
- * @param {string} bitratePreset     - key trong VIDEO_PRESETS
- * @param {string|null} watermarkPath
- * @param {string} watermarkPosition - top-left | top-center | top-right |
- *                                     center-left | center | center-right |
- *                                     bottom-left | bottom-center | bottom-right
- */
 const processVideo = (
   inputPath,
   outputPath,
@@ -46,7 +31,6 @@ const processVideo = (
     const preset  = VIDEO_PRESETS[bitratePreset] ?? VIDEO_PRESETS['720p'];
     const { videoBitrate, audioBitrate, scale } = preset;
 
-    // ── Overlay position expressions ────────────────────────────────────────
     const overlayMap = {
       'top-left':      'x=10:y=10',
       'top-center':    'x=(W-w)/2:y=10',
@@ -64,37 +48,34 @@ const processVideo = (
 
     let cmd = ffmpeg(inputPath);
 
-    // ── Filtergraph ──────────────────────────────────────────────────────────
     const filters = [];
 
     if (scale !== null) {
-      // Dùng if() expression của FFmpeg — dấu phẩy trong filtergraph PHẢI escape thành \\,
-      // if(gt(iw,scale),scale,iw) → nếu width gốc > scale thì scale xuống, ngược lại giữ nguyên
-      // h=-2 → tự tính height giữ tỉ lệ, đảm bảo chia hết cho 2 (yêu cầu libx264)
+      // Escape dấu phẩy trong FFmpeg filter expression
       filters.push(`[0:v]scale=w=if(gt(iw\\,${scale})\\,${scale}\\,iw):h=-2[scaled]`);
     } else {
-      // Original preset: dùng 'null' filter (passthrough decode) thay vì 'copy'
-      // 'copy' là stream-copy, không decode frame → không overlay được
+      // Original: dùng 'null' passthrough filter để decode frame (không phải stream copy)
       filters.push('[0:v]null[scaled]');
     }
 
     if (hasWatermark) {
-      // trunc(iw*0.15/2)*2 → làm tròn xuống bội số 2 để tránh lỗi odd-dimension của libx264
+      // trunc(iw*0.15/2)*2 → width/height chia hết 2, tránh lỗi libx264
       filters.push('[1:v]scale=trunc(iw*0.15/2)*2:-2[wm]');
       filters.push(`[scaled][wm]overlay=${overlayExpr}[out]`);
       cmd.input(wmPath);
     } else {
-      filters.push('[scaled]copy[out]');
+      // QUAN TRỌNG: dùng 'null' filter, KHÔNG phải 'copy'
+      // 'copy' không tồn tại trong filtergraph context → FFmpeg lỗi "Filter copy not found"
+      filters.push('[scaled]null[out]');
     }
 
     cmd.complexFilter(filters, 'out');
 
-    // ── Output options ───────────────────────────────────────────────────────
     cmd.outputOptions([
       '-c:v libx264',
       '-preset fast',
-      '-movflags +faststart', // web-friendly: moov atom ở đầu file
-      '-pix_fmt yuv420p',     // tương thích rộng (iOS, Android, browser)
+      '-movflags +faststart',
+      '-pix_fmt yuv420p',
     ]);
 
     if (videoBitrate) {
@@ -108,7 +89,8 @@ const processVideo = (
     if (audioBitrate) {
       cmd.outputOptions(['-c:a aac', `-b:a ${audioBitrate}`]);
     } else {
-      cmd.outputOptions(['-c:a aac', '-b:a 192k']); // re-encode audio để tương thích mp4
+      // Original: re-encode audio sang AAC để tương thích container mp4
+      cmd.outputOptions(['-c:a aac', '-b:a 192k']);
     }
 
     cmd
