@@ -63,45 +63,68 @@
 
     </div>
 
-    <!-- Preview canvas — chỉ hiện khi imageStore có ảnh (store.previewUrls tồn tại) -->
-    <div v-if="store.previewUrls?.length > 0" class="wm-preview-section">
+    <!-- ══════════════════════════════════════════════════════════════════════
+         Preview section — tự chọn chế độ:
+         • isVideo = false  → canvas từ store.previewUrls[] (image tab)
+         • isVideo = true   → capture frame video hiện tại (video tab)
+    ═══════════════════════════════════════════════════════════════════════ -->
+
+    <!-- IMAGE preview (giữ nguyên logic cũ) -->
+    <div v-if="!isVideo && store.previewUrls?.length > 0" class="wm-preview-section">
       <div class="wm-preview-header">
         <p class="wm-preview-title">👁 Preview ảnh với Logo:</p>
         <div class="wm-preview-nav">
-          <button
-            class="wm-nav-btn"
-            :disabled="currentIndex === 0"
-            @click="currentIndex--"
-          >‹</button>
+          <button class="wm-nav-btn" :disabled="currentIndex === 0" @click="currentIndex--">‹</button>
           <span class="wm-nav-counter">{{ currentIndex + 1 }} / {{ store.selectedFiles.length }}</span>
-          <button
-            class="wm-nav-btn"
-            :disabled="currentIndex === store.selectedFiles.length - 1"
-            @click="currentIndex++"
-          >›</button>
+          <button class="wm-nav-btn" :disabled="currentIndex === store.selectedFiles.length - 1" @click="currentIndex++">›</button>
         </div>
       </div>
-
       <p class="wm-preview-filename">{{ store.selectedFiles[currentIndex]?.name }}</p>
       <canvas ref="canvasRef" class="wm-canvas"></canvas>
     </div>
+
+    <!-- VIDEO preview — hiện khi video đã được chọn -->
+    <div v-if="isVideo && store.selectedFile" class="wm-preview-section">
+      <div class="wm-preview-header">
+        <p class="wm-preview-title">👁 Preview frame với Logo:</p>
+        <button class="wm-refresh-btn" @click="captureVideoFrame" title="Cập nhật preview từ frame hiện tại">
+          🔄 Cập nhật frame
+        </button>
+      </div>
+      <p class="wm-preview-hint">▶ Phát video đến frame muốn xem, nhấn "Cập nhật frame"</p>
+
+      <!-- Video ẩn — dùng để capture frame, không hiển thị (đã có player ở VideoUploader) -->
+      <video
+        ref="hiddenVideoRef"
+        :src="store.previewUrl"
+        style="display:none"
+        preload="metadata"
+        crossorigin="anonymous"
+      ></video>
+
+      <canvas ref="canvasRef" class="wm-canvas"></canvas>
+    </div>
+
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue'
 
-// ── Nhận store từ bên ngoài qua prop ─────────────────────────────────────
-// Cho phép dùng được với cả imageStore lẫn videoStore
 const props = defineProps({
   store: { type: Object, required: true },
 })
 const store = props.store
 
-const inputRef    = ref(null)
-const canvasRef   = ref(null)
-const isDragging  = ref(false)
-const currentIndex = ref(0)
+// ── Phát hiện đây là video store hay image store ──────────────────────────
+// videoStore có selectedFile (singular), imageStore có selectedFiles (plural)
+const isVideo = computed(() => 'selectedFile' in store && !('selectedFiles' in store))
+
+const inputRef       = ref(null)
+const canvasRef      = ref(null)
+const hiddenVideoRef = ref(null)
+const isDragging     = ref(false)
+const currentIndex   = ref(0)
 
 // ── Danh sách vị trí ─────────────────────────────────────────────────────
 const positionGrid = [
@@ -132,7 +155,7 @@ const onDrop = (e) => {
   if (file) store.setWatermark(file)
 }
 
-// ── Canvas preview (chỉ chạy khi store có previewUrls — tức imageStore) ──
+// ── Tính tọa độ vẽ logo ───────────────────────────────────────────────────
 const calcWmPosition = (position, canvasW, canvasH, wmW, wmH, padding) => {
   const cx = Math.round((canvasW - wmW) / 2)
   const cy = Math.round((canvasH - wmH) / 2)
@@ -159,24 +182,25 @@ const loadImage = (src) => new Promise((resolve, reject) => {
   img.src = src
 })
 
-const drawPreview = async () => {
-  await nextTick()
+// ── Vẽ logo lên canvas với source là ImageBitmap hoặc HTMLImageElement ────
+const drawLogoOnCanvas = async (source, sourceW, sourceH) => {
   const canvas = canvasRef.value
   if (!canvas) return
-  const imgUrl = store.previewUrls?.[currentIndex.value]
-  if (!imgUrl) return
+
   const wmUrl = store.watermarkUrl || '/assets/watermark.png'
+  const maxW  = 600
+  const scale = Math.min(1, maxW / sourceW)
+  const dispW = Math.round(sourceW * scale)
+  const dispH = Math.round(sourceH * scale)
+
+  canvas.width  = dispW
+  canvas.height = dispH
+
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(source, 0, 0, dispW, dispH)
+
   try {
-    const ctx = canvas.getContext('2d')
-    const img = await loadImage(imgUrl)
-    const maxW  = 600
-    const scale = Math.min(1, maxW / img.naturalWidth)
-    const dispW = Math.round(img.naturalWidth  * scale)
-    const dispH = Math.round(img.naturalHeight * scale)
-    canvas.width  = dispW
-    canvas.height = dispH
-    ctx.drawImage(img, 0, 0, dispW, dispH)
-    const wm = await loadImage(wmUrl)
+    const wm      = await loadImage(wmUrl)
     const wmMaxW  = Math.round(dispW * 0.15)
     const wmScale = wmMaxW / wm.naturalWidth
     const wmW     = Math.round(wm.naturalWidth  * wmScale)
@@ -185,18 +209,90 @@ const drawPreview = async () => {
     const { left, top } = calcWmPosition(store.watermarkPosition, dispW, dispH, wmW, wmH, padding)
     ctx.drawImage(wm, left, top, wmW, wmH)
   } catch (err) {
-    console.error('drawPreview error:', err)
+    console.error('drawLogoOnCanvas error:', err)
   }
 }
 
-watch(() => store.previewUrls?.length, (len) => { if (len > 0) drawPreview() })
-watch(() => store.watermarkUrl,         () => { if (store.previewUrls?.[currentIndex.value]) drawPreview() })
-watch(() => store.watermarkPosition,    () => { if (store.previewUrls?.[currentIndex.value]) drawPreview() })
-watch(currentIndex,                     () => { if (store.previewUrls?.[currentIndex.value]) drawPreview() })
-watch(
-  () => store.selectedFiles?.length,
-  (len) => { if (len !== undefined && currentIndex.value >= len) currentIndex.value = Math.max(0, len - 1) }
-)
+// ── IMAGE preview ─────────────────────────────────────────────────────────
+const drawImagePreview = async () => {
+  await nextTick()
+  const imgUrl = store.previewUrls?.[currentIndex.value]
+  if (!imgUrl) return
+  try {
+    const img = await loadImage(imgUrl)
+    await drawLogoOnCanvas(img, img.naturalWidth, img.naturalHeight)
+  } catch (err) {
+    console.error('drawImagePreview error:', err)
+  }
+}
+
+// ── VIDEO preview: capture frame tại currentTime ──────────────────────────
+const captureVideoFrame = async () => {
+  await nextTick()
+  const video = hiddenVideoRef.value
+  if (!video || !video.src) return
+
+  // Nếu video chưa load metadata thì chờ
+  if (video.readyState < 1) {
+    await new Promise((resolve) => {
+      video.addEventListener('loadedmetadata', resolve, { once: true })
+    })
+  }
+
+  // Sync currentTime với video player đang hiển thị ở VideoUploader
+  // (cùng src, browser cache frame) — không cần làm gì thêm, dùng currentTime mặc định = 0
+  // hoặc có thể seekTo giây 0 để luôn lấy frame đầu nếu chưa seek
+
+  await drawLogoOnCanvas(video, video.videoWidth, video.videoHeight)
+}
+
+// ── Watches ───────────────────────────────────────────────────────────────
+
+// Image tab: vẽ lại khi danh sách ảnh / watermark / position / index thay đổi
+watch(() => store.previewUrls?.length, (len) => { if (!isVideo.value && len > 0) drawImagePreview() })
+watch(() => store.watermarkUrl, () => {
+  if (isVideo.value) {
+    if (store.selectedFile) captureVideoFrame()
+  } else {
+    if (store.previewUrls?.[currentIndex.value]) drawImagePreview()
+  }
+})
+watch(() => store.watermarkPosition, () => {
+  if (isVideo.value) {
+    if (store.selectedFile) captureVideoFrame()
+  } else {
+    if (store.previewUrls?.[currentIndex.value]) drawImagePreview()
+  }
+})
+watch(currentIndex, () => {
+  if (!isVideo.value && store.previewUrls?.[currentIndex.value]) drawImagePreview()
+})
+watch(() => store.selectedFiles?.length, (len) => {
+  if (len !== undefined && currentIndex.value >= len)
+    currentIndex.value = Math.max(0, len - 1)
+})
+
+// Video tab: vẽ preview ngay khi video được chọn (lấy frame đầu tiên)
+watch(() => store.previewUrl, async (url) => {
+  if (!isVideo.value || !url) return
+  await nextTick()
+  const video = hiddenVideoRef.value
+  if (!video) return
+  // Chờ video load xong metadata rồi capture frame đầu
+  const draw = async () => {
+    // seek tới 0.1s để tránh frame đen ở một số video
+    video.currentTime = 0.1
+    await new Promise((resolve) => {
+      video.addEventListener('seeked', resolve, { once: true })
+    })
+    await captureVideoFrame()
+  }
+  if (video.readyState >= 1) {
+    draw()
+  } else {
+    video.addEventListener('loadedmetadata', draw, { once: true })
+  }
+})
 </script>
 
 <style scoped>
@@ -337,9 +433,29 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 .wm-preview-title { font-size: 12px; color: #64748b; margin: 0; }
+
+/* Nút cập nhật frame (chỉ dùng ở video tab) */
+.wm-refresh-btn {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.wm-refresh-btn:hover { background: #3b82f6; color: white; border-color: #3b82f6; }
+
+.wm-preview-hint {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 0 0 8px;
+}
+
 .wm-preview-nav { display: flex; align-items: center; gap: 6px; }
 .wm-nav-btn {
   background: #e2e8f0;

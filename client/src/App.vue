@@ -1,7 +1,7 @@
 <template>
   <div class="app">
     <header class="app-header">
-      <h1>🖼 Watermark & Compress</h1>
+      <h1>Watermark & Compress</h1>
       <p>Giảm resolution ảnh và bitrate video, chèn watermark tự động</p>
     </header>
 
@@ -12,12 +12,12 @@
           class="tab-btn"
           :class="{ 'tab-btn--active': activeTab === 'image' }"
           @click="activeTab = 'image'"
-        >🖼 Ảnh</button>
+        >Ảnh</button>
         <button
           class="tab-btn"
           :class="{ 'tab-btn--active': activeTab === 'video' }"
           @click="activeTab = 'video'"
-        >🎬 Video</button>
+        >Video</button>
       </div>
 
       <!-- Image tab -->

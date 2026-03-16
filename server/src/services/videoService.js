@@ -32,15 +32,15 @@ const processVideo = (
     const { videoBitrate, audioBitrate, scale } = preset;
 
     const overlayMap = {
-      'top-left':      'x=10:y=10',
-      'top-center':    'x=(W-w)/2:y=10',
-      'top-right':     'x=W-w-10:y=10',
-      'center-left':   'x=10:y=(H-h)/2',
+      'top-left':      'x=15:y=15',
+      'top-center':    'x=(W-w)/2:y=15',
+      'top-right':     'x=W-w-15:y=15',
+      'center-left':   'x=15:y=(H-h)/2',
       'center':        'x=(W-w)/2:y=(H-h)/2',
-      'center-right':  'x=W-w-10:y=(H-h)/2',
-      'bottom-left':   'x=10:y=H-h-10',
-      'bottom-center': 'x=(W-w)/2:y=H-h-10',
-      'bottom-right':  'x=W-w-10:y=H-h-10',
+      'center-right':  'x=W-w-15:y=(H-h)/2',
+      'bottom-left':   'x=15:y=H-h-15',
+      'bottom-center': 'x=(W-w)/2:y=H-h-15',
+      'bottom-right':  'x=W-w-15:y=H-h-15',
     };
     const overlayExpr = overlayMap[watermarkPosition] || overlayMap['bottom-left'];
 
