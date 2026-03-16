@@ -30,6 +30,7 @@
       <!-- Video tab -->
       <div v-show="activeTab === 'video'" class="card">
         <VideoUploader />
+        <WatermarkUploader />
       </div>
 
       <!-- History chung -->
