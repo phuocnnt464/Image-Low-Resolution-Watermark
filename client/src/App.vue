@@ -1,18 +1,38 @@
 <template>
   <div class="app">
     <header class="app-header">
-      <h1>Image Watermark & Compress</h1>
-      <p>Upload ảnh, giảm resolution và chèn watermark tự động</p>
+      <h1>🖼 Watermark & Compress</h1>
+      <p>Giảm resolution ảnh và bitrate video, chèn watermark tự động</p>
     </header>
 
     <main class="app-main">
-      <div class="card">
+      <!-- Tab switcher -->
+      <div class="tab-bar">
+        <button
+          class="tab-btn"
+          :class="{ 'tab-btn--active': activeTab === 'image' }"
+          @click="activeTab = 'image'"
+        >🖼 Ảnh</button>
+        <button
+          class="tab-btn"
+          :class="{ 'tab-btn--active': activeTab === 'video' }"
+          @click="activeTab = 'video'"
+        >🎬 Video</button>
+      </div>
+
+      <!-- Image tab -->
+      <div v-show="activeTab === 'image'" class="card">
         <ImageUploader />
-        <!-- Watermark uploader nằm trong cùng card với ảnh -->
         <WatermarkUploader />
         <ImagePreviewGrid />
       </div>
 
+      <!-- Video tab -->
+      <div v-show="activeTab === 'video'" class="card">
+        <VideoUploader />
+      </div>
+
+      <!-- History chung -->
       <div class="card">
         <HistoryTable />
       </div>
@@ -21,13 +41,15 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useImageStore } from './stores/imageStore'
-import ImageUploader    from './components/ImageUploader.vue'
+import ImageUploader     from './components/ImageUploader.vue'
 import WatermarkUploader from './components/WatermarkUploader.vue'
 import ImagePreviewGrid  from './components/ImagePreviewGrid.vue'
+import VideoUploader     from './components/VideoUploader.vue'
 import HistoryTable      from './components/HistoryTable.vue'
 
+const activeTab = ref('image')
 const store = useImageStore()
 onMounted(() => store.fetchHistory())
 </script>
@@ -62,4 +84,29 @@ body {
   padding: 16px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.07);
 }
+
+/* Tab bar */
+.tab-bar {
+  display: flex;
+  gap: 8px;
+  background: white;
+  border-radius: 12px;
+  padding: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+}
+.tab-btn {
+  flex: 1;
+  padding: 10px 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 15px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.tab-btn:hover { background: #f1f5f9; color: #1e293b; }
+.tab-btn--active { background: #3b82f6; color: white; }
+.tab-btn--active:hover { background: #2563eb; }
 </style>

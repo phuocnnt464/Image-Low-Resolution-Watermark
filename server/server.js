@@ -5,6 +5,7 @@ const path       = require('path');
 const bodyParser = require('body-parser');
 const initDB     = require('./src/config/initDB');
 const imageRoutes = require('./src/routes/imageRoutes');
+const videoRoutes = require('./src/routes/videoRoutes');
 
 const port = process.env.PORT || 3000;
 const app  = express();
@@ -17,6 +18,7 @@ app.use('/assets', express.static(path.resolve(__dirname, 'assets')));
 
 // Routes
 app.use('/api/images', imageRoutes);
+app.use('/api/videos', videoRoutes);
 
 // 404 handler
 app.use((req, res) => {
