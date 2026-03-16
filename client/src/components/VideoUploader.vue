@@ -42,6 +42,60 @@
         <span class="vp-filesize">({{ formatSize(store.selectedFile.size) }})</span>
       </p>
 
+      <!-- ── Logo + Vị trí (giống hệt WatermarkUploader) ── -->
+      <div class="wm-section">
+        <div class="wm-header">
+          <h3>Logo Optional</h3>
+          <span class="wm-badge" :class="store.watermarkFile ? 'wm-badge--custom' : 'wm-badge--default'">
+            {{ store.watermarkFile ? 'Tùy chỉnh' : 'Mặc định' }}
+          </span>
+        </div>
+
+        <div class="wm-controls-row">
+          <!-- 2/3: logo drop zone -->
+          <div class="wm-body">
+            <div
+              class="wm-drop"
+              :class="{ 'wm-drop--drag': isWmDragging, 'wm-drop--has': !!store.watermarkFile }"
+              @dragover.prevent="isWmDragging = true"
+              @dragleave.prevent="isWmDragging = false"
+              @drop.prevent="onWmDrop"
+              @click="wmInput.click()"
+            >
+              <input ref="wmInput" type="file" accept="image/jpeg,image/png,image/webp" style="display:none" @change="onWmChange" />
+              <template v-if="!store.watermarkFile">
+                <div class="wm-drop__icon">🏷️</div>
+                <p class="wm-drop__text">Kéo thả hoặc <span class="wm-drop__link">chọn logo</span></p>
+                <p class="wm-drop__hint">Nếu không upload, logo mặc định sẽ được dùng</p>
+              </template>
+              <template v-else>
+                <img :src="store.watermarkUrl" class="wm-drop__preview" alt="Watermark preview" />
+                <p class="wm-drop__name">{{ store.watermarkFile.name }}</p>
+              </template>
+            </div>
+            <button v-if="store.watermarkFile" class="wm-clear" @click.stop="store.clearWatermark()">
+              🗑 Dùng Logo mặc định
+            </button>
+          </div>
+
+          <!-- 1/3: vị trí 3×3 icon grid -->
+          <div class="wm-position-section">
+            <p class="wm-position-label">📍 Vị trí:</p>
+            <div class="wm-position-grid">
+              <button
+                v-for="pos in positionGrid"
+                :key="pos.value"
+                class="wm-pos-btn"
+                :class="{ 'wm-pos-btn--active': store.watermarkPosition === pos.value }"
+                :title="pos.label"
+                @click="store.watermarkPosition = pos.value"
+              >{{ pos.icon }}</button>
+            </div>
+            <p class="wm-position-name">{{ currentPositionLabel }}</p>
+          </div>
+        </div>
+      </div>
+
       <!-- ── Bitrate preset ── -->
       <div class="resolution-control">
         <div class="resolution-control__header">
