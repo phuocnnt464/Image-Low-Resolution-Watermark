@@ -23,13 +23,14 @@
       <!-- Image tab -->
       <div v-show="activeTab === 'image'" class="card">
         <ImageUploader />
-        <WatermarkUploader />
-        <ImagePreviewGrid />
+        <WatermarkUploader :store="imageStore" />
+        <PreviewGrid />
       </div>
 
       <!-- Video tab -->
       <div v-show="activeTab === 'video'" class="card">
         <VideoUploader />
+        <WatermarkUploader :store="videoStore" />
       </div>
 
       <!-- History chung -->
@@ -42,16 +43,19 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useImageStore } from './stores/imageStore'
-import ImageUploader     from './components/ImageUploader.vue'
-import WatermarkUploader from './components/WatermarkUploader.vue'
-import ImagePreviewGrid  from './components/ImagePreviewGrid.vue'
-import VideoUploader     from './components/VideoUploader.vue'
-import HistoryTable      from './components/HistoryTable.vue'
+import { useImageStore }  from './stores/imageStore'
+import { useVideoStore }  from './stores/videoStore'
+import ImageUploader      from './components/ImageUploader.vue'
+import WatermarkUploader  from './components/WatermarkUploader.vue'
+import PreviewGrid        from './components/PreviewGrid.vue'
+import VideoUploader      from './components/VideoUploader.vue'
+import HistoryTable       from './components/HistoryTable.vue'
 
-const activeTab = ref('image')
-const store = useImageStore()
-onMounted(() => store.fetchHistory())
+const activeTab  = ref('image')
+const imageStore = useImageStore()
+const videoStore = useVideoStore()
+
+onMounted(() => imageStore.fetchHistory())
 </script>
 
 <style>
@@ -84,8 +88,6 @@ body {
   padding: 16px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.07);
 }
-
-/* Tab bar */
 .tab-bar {
   display: flex;
   gap: 8px;

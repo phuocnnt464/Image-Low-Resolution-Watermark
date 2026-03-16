@@ -1,7 +1,7 @@
 <template>
   <div class="video-section">
 
-    <!-- ── Drop zone (khi chưa chọn video) ── -->
+    <!-- ── Drop zone ── -->
     <div
       v-if="!store.selectedFile"
       class="uploader"
@@ -26,10 +26,11 @@
     <!-- ── Sau khi đã chọn video ── -->
     <div v-else class="video-preview">
 
-      <!-- Video player — gọi .load() qua ref khi src thay đổi -->
+      <!-- ✅ FIX: dùng :key="store.previewUrl" — browser tự reload khi src thay đổi -->
+      <!-- KHÔNG cần watch + videoRef.load() nữa -->
       <div class="vp-wrap">
         <video
-          ref="videoRef"
+          :key="store.previewUrl"
           :src="store.previewUrl"
           controls
           preload="metadata"
@@ -41,60 +42,6 @@
         📁 {{ store.selectedFile.name }}
         <span class="vp-filesize">({{ formatSize(store.selectedFile.size) }})</span>
       </p>
-
-      <!-- ── Logo + Vị trí (giống hệt WatermarkUploader) ── -->
-      <div class="wm-section">
-        <div class="wm-header">
-          <h3>Logo Optional</h3>
-          <span class="wm-badge" :class="store.watermarkFile ? 'wm-badge--custom' : 'wm-badge--default'">
-            {{ store.watermarkFile ? 'Tùy chỉnh' : 'Mặc định' }}
-          </span>
-        </div>
-
-        <div class="wm-controls-row">
-          <!-- 2/3: logo drop zone -->
-          <div class="wm-body">
-            <div
-              class="wm-drop"
-              :class="{ 'wm-drop--drag': isWmDragging, 'wm-drop--has': !!store.watermarkFile }"
-              @dragover.prevent="isWmDragging = true"
-              @dragleave.prevent="isWmDragging = false"
-              @drop.prevent="onWmDrop"
-              @click="wmInput.click()"
-            >
-              <input ref="wmInput" type="file" accept="image/jpeg,image/png,image/webp" style="display:none" @change="onWmChange" />
-              <template v-if="!store.watermarkFile">
-                <div class="wm-drop__icon">🏷️</div>
-                <p class="wm-drop__text">Kéo thả hoặc <span class="wm-drop__link">chọn logo</span></p>
-                <p class="wm-drop__hint">Nếu không upload, logo mặc định sẽ được dùng</p>
-              </template>
-              <template v-else>
-                <img :src="store.watermarkUrl" class="wm-drop__preview" alt="Watermark preview" />
-                <p class="wm-drop__name">{{ store.watermarkFile.name }}</p>
-              </template>
-            </div>
-            <button v-if="store.watermarkFile" class="wm-clear" @click.stop="store.clearWatermark()">
-              🗑 Dùng Logo mặc định
-            </button>
-          </div>
-
-          <!-- 1/3: vị trí 3×3 icon grid -->
-          <div class="wm-position-section">
-            <p class="wm-position-label">📍 Vị trí:</p>
-            <div class="wm-position-grid">
-              <button
-                v-for="pos in positionGrid"
-                :key="pos.value"
-                class="wm-pos-btn"
-                :class="{ 'wm-pos-btn--active': store.watermarkPosition === pos.value }"
-                :title="pos.label"
-                @click="store.watermarkPosition = pos.value"
-              >{{ pos.icon }}</button>
-            </div>
-            <p class="wm-position-name">{{ currentPositionLabel }}</p>
-          </div>
-        </div>
-      </div>
 
       <!-- ── Bitrate preset ── -->
       <div class="resolution-control">
@@ -133,7 +80,7 @@
         @click="store.processAndDownload"
       >
         <span v-if="store.isProcessing">⏳ Đang xử lý video...</span>
-        <span v-else>⬇️ Xử lý & Tải xuống video</span>
+        <span v-else>Xử lý & Tải xuống video</span>
       </button>
 
     </div>
@@ -141,26 +88,12 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed } from 'vue'
 import { useVideoStore } from '../stores/videoStore'
 
-const store      = useVideoStore()
-const fileInput  = ref(null)
-const wmInput    = ref(null)
-const videoRef   = ref(null)   // ← ref trỏ vào <video>
-const isDragging   = ref(false)
-const isWmDragging = ref(false)
-
-// ─��� Force browser reload video khi src thay đổi ───────────────────────────
-// Cần thiết vì browser không tự reload khi src được gán lại bằng reactive
-watch(
-  () => store.previewUrl,
-  async (url) => {
-    if (!url) return
-    await nextTick()          // chờ Vue update DOM
-    videoRef.value?.load()    // báo browser load source mới
-  }
-)
+const store     = useVideoStore()
+const fileInput = ref(null)
+const isDragging = ref(false)
 
 // ── Bitrate presets ────────────────────────────────────────────────────────
 const bitratePresets = [
@@ -177,30 +110,12 @@ const selectedPreset = computed(
   () => bitratePresets.find(p => p.value === store.bitratePreset) ?? bitratePresets[3]
 )
 
-// ── Position grid ──────────────────────────────────────────────────────────
-const positionGrid = [
-  { value: 'top-left',      label: 'Trên trái',  icon: '↖' },
-  { value: 'top-center',    label: 'Trên giữa',  icon: '↑' },
-  { value: 'top-right',     label: 'Trên phải',  icon: '↗' },
-  { value: 'center-left',   label: 'Giữa trái',  icon: '←' },
-  { value: 'center',        label: 'Giữa',        icon: '⊙' },
-  { value: 'center-right',  label: 'Giữa phải',  icon: '→' },
-  { value: 'bottom-left',   label: 'Dưới trái',  icon: '↙' },
-  { value: 'bottom-center', label: 'Dưới giữa',  icon: '↓' },
-  { value: 'bottom-right',  label: 'Dưới phải',  icon: '↘' },
-]
-
-const currentPositionLabel = computed(
-  () => positionGrid.find(p => p.value === store.watermarkPosition)?.label ?? ''
-)
-
 const formatSize = (bytes) => {
   if (!bytes) return '—'
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
-// ── Event handlers ─────────────────────────────────────────────────────────
 const onFileChange = (e) => {
   const file = e.target.files[0]
   if (file) store.setVideo(file)
@@ -211,18 +126,6 @@ const onDrop = (e) => {
   isDragging.value = false
   const file = e.dataTransfer.files[0]
   if (file && file.type.startsWith('video/')) store.setVideo(file)
-}
-
-const onWmChange = (e) => {
-  const file = e.target.files[0]
-  if (file) store.setWatermark(file)
-  e.target.value = ''
-}
-
-const onWmDrop = (e) => {
-  isWmDragging.value = false
-  const file = e.dataTransfer.files[0]
-  if (file && file.type.startsWith('image/')) store.setWatermark(file)
 }
 </script>
 
@@ -237,18 +140,14 @@ const onWmDrop = (e) => {
   transition: all 0.2s;
   background: #f8fafc;
 }
-.uploader:hover,
-.uploader--drag {
-  border-color: #3b82f6;
-  background: #eff6ff;
-}
+.uploader:hover, .uploader--drag { border-color: #3b82f6; background: #eff6ff; }
 .uploader__icon { font-size: 48px; margin-bottom: 12px; }
 .uploader__text { font-size: 16px; color: #475569; margin: 0 0 4px; }
 .uploader__link { color: #3b82f6; font-weight: 500; }
 .uploader__hint { font-size: 13px; color: #94a3b8; margin: 0; }
 
 /* ── Video preview wrapper ── */
-.video-preview { display: flex; flex-direction: column; gap: 8px; }
+.video-preview { display: flex; flex-direction: column; gap: 12px; }
 
 /* ── Video player ── */
 .vp-wrap {
@@ -259,10 +158,8 @@ const onWmDrop = (e) => {
 }
 .vp-player {
   width: 100%;
-  /* KHÔNG đặt max-height cứng — để browser tự tính theo aspect ratio */
   max-height: 480px;
   display: block;
-  /* object-fit: contain giữ đúng tỉ lệ gốc, padding đen 2 bên nếu cần */
   object-fit: contain;
 }
 .vp-remove {
@@ -281,82 +178,6 @@ const onWmDrop = (e) => {
 .vp-remove:hover { background: #ef4444; }
 .vp-filename { font-size: 13px; color: #475569; }
 .vp-filesize { color: #94a3b8; }
-
-/* ── Logo section ── */
-.wm-section {
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 16px;
-  background: #fafafa;
-}
-.wm-header {
-  display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
-}
-.wm-header h3 { margin: 0; font-size: 15px; color: #1e293b; }
-.wm-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
-.wm-badge--default { background: #f1f5f9; color: #64748b; }
-.wm-badge--custom  { background: #dbeafe; color: #2563eb; }
-
-.wm-controls-row { display: flex; gap: 12px; align-items: flex-start; }
-.wm-body { flex: 2; min-width: 0; display: flex; flex-direction: column; }
-
-.wm-drop {
-  border: 2px dashed #cbd5e1;
-  border-radius: 8px;
-  padding: 16px 12px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.2s;
-  background: white;
-  min-height: 110px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-}
-.wm-drop:hover, .wm-drop--drag { border-color: #3b82f6; background: #eff6ff; }
-.wm-drop--has { border-style: solid; border-color: #3b82f6; }
-.wm-drop__icon  { font-size: 24px; margin-bottom: 4px; }
-.wm-drop__text  { font-size: 12px; color: #475569; margin: 0 0 3px; }
-.wm-drop__link  { color: #3b82f6; font-weight: 600; }
-.wm-drop__hint  { font-size: 11px; color: #94a3b8; margin: 0; }
-.wm-drop__preview { max-height: 52px; max-width: 100px; object-fit: contain; margin-bottom: 4px; }
-.wm-drop__name  { font-size: 11px; color: #64748b; margin: 0; }
-
-.wm-clear {
-  margin-top: 6px;
-  width: 100%;
-  background: transparent;
-  border: 1px solid #fca5a5;
-  color: #ef4444;
-  border-radius: 6px;
-  padding: 5px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.wm-clear:hover { background: #fef2f2; }
-
-.wm-position-section {
-  flex: 1; min-width: 0;
-  padding: 12px; background: #f8fafc;
-  border: 1px solid #e2e8f0; border-radius: 8px;
-  display: flex; flex-direction: column; align-items: center;
-}
-.wm-position-label { font-size: 12px; color: #475569; margin: 0 0 8px; align-self: flex-start; }
-.wm-position-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 28px);
-  grid-template-rows: repeat(3, 28px);
-  gap: 3px; width: fit-content;
-}
-.wm-pos-btn {
-  width: 28px; height: 28px;
-  border: 1px solid #cbd5e1; border-radius: 5px;
-  background: white; cursor: pointer; font-size: 13px;
-  display: flex; align-items: center; justify-content: center;
-  transition: all 0.15s; padding: 0; color: #64748b;
-}
-.wm-pos-btn:hover { background: #eff6ff; border-color: #3b82f6; color: #3b82f6; }
-.wm-pos-btn--active { background: #3b82f6; border-color: #3b82f6; color: white; }
-.wm-position-name { margin: 6px 0 0; font-size: 11px; color: #3b82f6; font-weight: 600; text-align: center; }
 
 /* ── Bitrate preset ── */
 .resolution-control {
@@ -394,7 +215,6 @@ const onWmDrop = (e) => {
 .res-btn--active.res-btn--tier-mid  .res-btn__name { color: #2563eb; }
 .res-btn--active.res-btn--tier-low  { border-color: #f97316; background: #fff7ed; }
 .res-btn--active.res-btn--tier-low  .res-btn__name { color: #ea580c; }
-
 .res-btn--tier-high .res-btn__sub { color: #86efac; }
 .res-btn--tier-mid  .res-btn__sub { color: #93c5fd; }
 .res-btn--tier-low  .res-btn__sub { color: #fdba74; }

@@ -63,9 +63,8 @@
 
     </div>
 
-
-    <!-- Preview ảnh đã chèn logo (Canvas) -->
-    <div v-if="store.selectedFiles.length > 0" class="wm-preview-section">
+    <!-- Preview canvas — chỉ hiện khi imageStore có ảnh (store.previewUrls tồn tại) -->
+    <div v-if="store.previewUrls?.length > 0" class="wm-preview-section">
       <div class="wm-preview-header">
         <p class="wm-preview-title">👁 Preview ảnh với Logo:</p>
         <div class="wm-preview-nav">
@@ -91,12 +90,17 @@
 
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue'
-import { useImageStore } from '../stores/imageStore'
 
-const store      = useImageStore()
-const inputRef   = ref(null)
-const canvasRef  = ref(null)
-const isDragging = ref(false)
+// ── Nhận store từ bên ngoài qua prop ─────────────────────────────────────
+// Cho phép dùng được với cả imageStore lẫn videoStore
+const props = defineProps({
+  store: { type: Object, required: true },
+})
+const store = props.store
+
+const inputRef    = ref(null)
+const canvasRef   = ref(null)
+const isDragging  = ref(false)
 const currentIndex = ref(0)
 
 // ── Danh sách vị trí ─────────────────────────────────────────────────────
@@ -128,26 +132,25 @@ const onDrop = (e) => {
   if (file) store.setWatermark(file)
 }
 
-// ── Tính tọa độ watermark theo position ──────────────────────────────────
+// ── Canvas preview (chỉ chạy khi store có previewUrls — tức imageStore) ──
 const calcWmPosition = (position, canvasW, canvasH, wmW, wmH, padding) => {
   const cx = Math.round((canvasW - wmW) / 2)
   const cy = Math.round((canvasH - wmH) / 2)
   const map = {
-    'top-left':      { left: padding,                top: padding },
-    'top-center':    { left: cx,                     top: padding },
+    'top-left':      { left: padding,                 top: padding },
+    'top-center':    { left: cx,                      top: padding },
     'top-right':     { left: canvasW - wmW - padding, top: padding },
-    'center-left':   { left: padding,                top: cy },
-    'center':        { left: cx,                     top: cy },
+    'center-left':   { left: padding,                 top: cy },
+    'center':        { left: cx,                      top: cy },
     'center-right':  { left: canvasW - wmW - padding, top: cy },
-    'bottom-left':   { left: padding,                top: canvasH - wmH - padding },
-    'bottom-center': { left: cx,                     top: canvasH - wmH - padding },
+    'bottom-left':   { left: padding,                 top: canvasH - wmH - padding },
+    'bottom-center': { left: cx,                      top: canvasH - wmH - padding },
     'bottom-right':  { left: canvasW - wmW - padding, top: canvasH - wmH - padding },
   }
   const pos = map[position] || map['bottom-left']
   return { left: Math.max(0, pos.left), top: Math.max(0, pos.top) }
 }
 
-// Load ảnh dưới dạng HTMLImageElement (hỗ trợ cả object URL và URL thông thường)
 const loadImage = (src) => new Promise((resolve, reject) => {
   const img = new Image()
   img.crossOrigin = 'anonymous'
@@ -158,75 +161,41 @@ const loadImage = (src) => new Promise((resolve, reject) => {
 
 const drawPreview = async () => {
   await nextTick()
-
   const canvas = canvasRef.value
   if (!canvas) return
-
-  const imgUrl = store.previewUrls[currentIndex.value]
+  const imgUrl = store.previewUrls?.[currentIndex.value]
   if (!imgUrl) return
-
-  // Dùng watermark custom nếu có, ngược lại dùng file mặc định từ server
   const wmUrl = store.watermarkUrl || '/assets/watermark.png'
-
   try {
     const ctx = canvas.getContext('2d')
-
     const img = await loadImage(imgUrl)
-
     const maxW  = 600
     const scale = Math.min(1, maxW / img.naturalWidth)
     const dispW = Math.round(img.naturalWidth  * scale)
     const dispH = Math.round(img.naturalHeight * scale)
-
     canvas.width  = dispW
     canvas.height = dispH
     ctx.drawImage(img, 0, 0, dispW, dispH)
-
     const wm = await loadImage(wmUrl)
-
     const wmMaxW  = Math.round(dispW * 0.15)
     const wmScale = wmMaxW / wm.naturalWidth
     const wmW     = Math.round(wm.naturalWidth  * wmScale)
     const wmH     = Math.round(wm.naturalHeight * wmScale)
-
     const padding = Math.max(8, Math.round(15 * scale))
     const { left, top } = calcWmPosition(store.watermarkPosition, dispW, dispH, wmW, wmH, padding)
-
     ctx.drawImage(wm, left, top, wmW, wmH)
   } catch (err) {
     console.error('drawPreview error:', err)
   }
 }
 
-// Vẽ lại khi danh sách ảnh thay đổi
+watch(() => store.previewUrls?.length, (len) => { if (len > 0) drawPreview() })
+watch(() => store.watermarkUrl,         () => { if (store.previewUrls?.[currentIndex.value]) drawPreview() })
+watch(() => store.watermarkPosition,    () => { if (store.previewUrls?.[currentIndex.value]) drawPreview() })
+watch(currentIndex,                     () => { if (store.previewUrls?.[currentIndex.value]) drawPreview() })
 watch(
-  () => store.previewUrls.length,
-  (len) => { if (len > 0) drawPreview() }
-)
-
-// Vẽ lại khi đổi watermark custom (hoặc xóa watermark → dùng mặc định)
-watch(
-  () => store.watermarkUrl,
-  () => { if (store.previewUrls[currentIndex.value]) drawPreview() }
-)
-
-// Vẽ lại khi chuyển ảnh
-watch(currentIndex, () => {
-  if (store.previewUrls[currentIndex.value]) drawPreview()
-})
-
-// Vẽ lại khi đổi vị trí
-watch(
-  () => store.watermarkPosition,
-  () => { if (store.previewUrls[currentIndex.value]) drawPreview() }
-)
-
-// Reset index nếu xóa ảnh
-watch(
-  () => store.selectedFiles.length,
-  (len) => {
-    if (currentIndex.value >= len) currentIndex.value = Math.max(0, len - 1)
-  }
+  () => store.selectedFiles?.length,
+  (len) => { if (len !== undefined && currentIndex.value >= len) currentIndex.value = Math.max(0, len - 1) }
 )
 </script>
 
@@ -255,7 +224,6 @@ watch(
 .wm-badge--default { background: #f1f5f9; color: #64748b; }
 .wm-badge--custom  { background: #dbeafe; color: #2563eb; }
 
-/* ── Layout hàng ngang: drop (2/3) + position (1/3) ── */
 .wm-controls-row {
   display: flex;
   gap: 12px;
@@ -263,7 +231,7 @@ watch(
 }
 
 .wm-body {
-  flex: 2;          /* 2/3 */
+  flex: 2;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -313,7 +281,6 @@ watch(
 }
 .wm-clear:hover { background: #fef2f2; }
 
-/* ── Position picker ── */
 .wm-position-section {
   flex: 1;
   min-width: 0;
@@ -366,7 +333,6 @@ watch(
 
 /* ── Preview section ── */
 .wm-preview-section { margin-top: 16px; }
-
 .wm-preview-header {
   display: flex;
   align-items: center;
@@ -374,7 +340,6 @@ watch(
   margin-bottom: 6px;
 }
 .wm-preview-title { font-size: 12px; color: #64748b; margin: 0; }
-
 .wm-preview-nav { display: flex; align-items: center; gap: 6px; }
 .wm-nav-btn {
   background: #e2e8f0;
@@ -398,7 +363,6 @@ watch(
   min-width: 36px;
   text-align: center;
 }
-
 .wm-preview-filename {
   font-size: 11px;
   color: #94a3b8;
@@ -407,7 +371,6 @@ watch(
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 .wm-canvas {
   max-width: 100%;
   border-radius: 6px;
