@@ -72,19 +72,11 @@
 
     <!-- VIDEO preview -->
     <div v-if="isVideo && store.selectedFile" class="wm-preview-section">
-      <div class="wm-preview-header">
-        <p class="wm-preview-title">👁 Preview frame với Logo:</p>
-        <button class="wm-refresh-btn" @click="onRefreshFrame">
-          🔄 Cập nhật frame
-        </button>
-      </div>
-      <p class="wm-preview-hint">▶ Tua video đến frame muốn xem rồi nhấn "Cập nhật frame"</p>
+      <p class="wm-preview-title">👁 Preview video với Logo:</p>
 
       <!--
-        ✅ Video ẩn đúng cách:
-        - visibility:hidden + position:absolute → browser VẪN decode frame
-        - display:none → browser KHÔNG decode frame (bug gốc)
-        - width/height > 0 bắt buộc để browser xử lý
+        Video ẩn: browser decode frame liên tục nhờ visibility:hidden
+        Canvas bên dưới sẽ render lại mỗi frame từ video này
       -->
       <video
         ref="hiddenVideoRef"
@@ -95,22 +87,59 @@
         crossorigin="anonymous"
       ></video>
 
-      <canvas ref="canvasRef" class="wm-canvas"></canvas>
+      <!-- Canvas có controls tự làm (play/pause/seek/volume) -->
+      <div class="vc-wrap">
+        <canvas ref="canvasRef" class="wm-canvas vc-canvas"></canvas>
+
+        <!-- Controls bar -->
+        <div class="vc-controls" v-if="videoReady">
+          <!-- Play/Pause -->
+          <button class="vc-btn" @click="togglePlay">
+            {{ isPlaying ? '⏸' : '▶' }}
+          </button>
+
+          <!-- Seekbar -->
+          <input
+            class="vc-seek"
+            type="range"
+            min="0"
+            :max="duration"
+            step="0.01"
+            :value="currentTime"
+            @input="onSeek"
+          />
+
+          <!-- Time -->
+          <span class="vc-time">{{ fmtTime(currentTime) }} / {{ fmtTime(duration) }}</span>
+
+          <!-- Volume -->
+          <button class="vc-btn" @click="toggleMute">
+            {{ isMuted ? '🔇' : '🔊' }}
+          </button>
+          <input
+            class="vc-volume"
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            :value="isMuted ? 0 : volume"
+            @input="onVolume"
+          />
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 
 const props = defineProps({
   store:    { type: Object, required: true },
-  // Giữ prop này để không break App.vue, nhưng không dùng nữa
   videoRef: { type: Object, default: null },
 })
 const store = props.store
 
-// Phát hiện image hay video store
 const isVideo = computed(() => 'selectedFile' in store && !('selectedFiles' in store))
 
 const inputRef       = ref(null)
@@ -118,7 +147,20 @@ const canvasRef      = ref(null)
 const hiddenVideoRef = ref(null)
 const isDragging     = ref(false)
 const currentIndex   = ref(0)
-const videoReady     = ref(false)  // true khi video đã decode được frame
+
+// Video player state
+const videoReady  = ref(false)
+const isPlaying   = ref(false)
+const isMuted     = ref(false)
+const volume      = ref(1)
+const currentTime = ref(0)
+const duration    = ref(0)
+
+// RAF loop handle
+let rafId = null
+// watermark image cache
+let wmImg = null
+let wmImgSrc = ''
 
 const positionGrid = [
   { value: 'top-left',      label: 'Trên trái',  icon: '↖' },
@@ -136,6 +178,7 @@ const currentPositionLabel = computed(
   () => positionGrid.find(p => p.value === store.watermarkPosition)?.label ?? ''
 )
 
+// ── File handlers ─────────────────────────────────────────────────────────
 const onFileChange = (e) => {
   const file = e.target.files?.[0]
   if (file) store.setWatermark(file)
@@ -147,23 +190,12 @@ const onDrop = (e) => {
   if (file) store.setWatermark(file)
 }
 
-// ── Canvas helpers ────────────────────────────────────────────────────────
-const calcWmPosition = (position, canvasW, canvasH, wmW, wmH, padding) => {
-  const cx = Math.round((canvasW - wmW) / 2)
-  const cy = Math.round((canvasH - wmH) / 2)
-  const map = {
-    'top-left':      { left: padding,                 top: padding },
-    'top-center':    { left: cx,                      top: padding },
-    'top-right':     { left: canvasW - wmW - padding, top: padding },
-    'center-left':   { left: padding,                 top: cy },
-    'center':        { left: cx,                      top: cy },
-    'center-right':  { left: canvasW - wmW - padding, top: cy },
-    'bottom-left':   { left: padding,                 top: canvasH - wmH - padding },
-    'bottom-center': { left: cx,                      top: canvasH - wmH - padding },
-    'bottom-right':  { left: canvasW - wmW - padding, top: canvasH - wmH - padding },
-  }
-  const pos = map[position] || map['bottom-left']
-  return { left: Math.max(0, pos.left), top: Math.max(0, pos.top) }
+// ── Helpers ───────────────────────────────────────────────────────────────
+const fmtTime = (s) => {
+  if (!s || isNaN(s)) return '0:00'
+  const m = Math.floor(s / 60)
+  const sec = Math.floor(s % 60).toString().padStart(2, '0')
+  return `${m}:${sec}`
 }
 
 const loadImage = (src) => new Promise((resolve, reject) => {
@@ -174,30 +206,32 @@ const loadImage = (src) => new Promise((resolve, reject) => {
   img.src = src
 })
 
-const drawLogoOnCanvas = async (source, sourceW, sourceH) => {
-  const canvas = canvasRef.value
-  if (!canvas || !sourceW || !sourceH) return
-  const wmUrl = store.watermarkUrl || '/assets/watermark.png'
-  const maxW  = 700
-  const scale = Math.min(1, maxW / sourceW)
-  const dispW = Math.round(sourceW * scale)
-  const dispH = Math.round(sourceH * scale)
-  canvas.width  = dispW
-  canvas.height = dispH
-  const ctx = canvas.getContext('2d')
-  ctx.drawImage(source, 0, 0, dispW, dispH)
+const getWmImg = async () => {
+  const src = store.watermarkUrl || '/assets/watermark.png'
+  if (wmImgSrc === src && wmImg) return wmImg
   try {
-    const wm      = await loadImage(wmUrl)
-    const wmMaxW  = Math.round(dispW * 0.15)
-    const wmScale = wmMaxW / wm.naturalWidth
-    const wmW     = Math.round(wm.naturalWidth  * wmScale)
-    const wmH     = Math.round(wm.naturalHeight * wmScale)
-    const padding = Math.max(8, Math.round(15 * scale))
-    const { left, top } = calcWmPosition(store.watermarkPosition, dispW, dispH, wmW, wmH, padding)
-    ctx.drawImage(wm, left, top, wmW, wmH)
-  } catch (err) {
-    console.error('drawLogoOnCanvas error:', err)
+    wmImg = await loadImage(src)
+    wmImgSrc = src
+  } catch { wmImg = null }
+  return wmImg
+}
+
+const calcWmPosition = (position, cW, cH, wmW, wmH, padding) => {
+  const cx = Math.round((cW - wmW) / 2)
+  const cy = Math.round((cH - wmH) / 2)
+  const map = {
+    'top-left':      { left: padding,          top: padding },
+    'top-center':    { left: cx,               top: padding },
+    'top-right':     { left: cW - wmW - padding, top: padding },
+    'center-left':   { left: padding,          top: cy },
+    'center':        { left: cx,               top: cy },
+    'center-right':  { left: cW - wmW - padding, top: cy },
+    'bottom-left':   { left: padding,          top: cH - wmH - padding },
+    'bottom-center': { left: cx,               top: cH - wmH - padding },
+    'bottom-right':  { left: cW - wmW - padding, top: cH - wmH - padding },
   }
+  const p = map[position] || map['bottom-left']
+  return { left: Math.max(0, p.left), top: Math.max(0, p.top) }
 }
 
 // ── IMAGE preview ─────────────────────────────────────────────────────────
@@ -205,39 +239,123 @@ const drawImagePreview = async () => {
   await nextTick()
   const imgUrl = store.previewUrls?.[currentIndex.value]
   if (!imgUrl) return
+  const canvas = canvasRef.value
+  if (!canvas) return
   try {
-    const img = await loadImage(imgUrl)
-    await drawLogoOnCanvas(img, img.naturalWidth, img.naturalHeight)
-  } catch (err) {
-    console.error('drawImagePreview error:', err)
+    const img   = await loadImage(imgUrl)
+    const maxW  = 700
+    const scale = Math.min(1, maxW / img.naturalWidth)
+    const dispW = Math.round(img.naturalWidth  * scale)
+    const dispH = Math.round(img.naturalHeight * scale)
+    canvas.width  = dispW
+    canvas.height = dispH
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(img, 0, 0, dispW, dispH)
+    const wm = await getWmImg()
+    if (wm) {
+      const wmMaxW  = Math.round(dispW * 0.15)
+      const wmScale = wmMaxW / wm.naturalWidth
+      const wmW     = Math.round(wm.naturalWidth  * wmScale)
+      const wmH     = Math.round(wm.naturalHeight * wmScale)
+      const pad     = Math.max(8, Math.round(15 * scale))
+      const { left, top } = calcWmPosition(store.watermarkPosition, dispW, dispH, wmW, wmH, pad)
+      ctx.drawImage(wm, left, top, wmW, wmH)
+    }
+  } catch (err) { console.error('drawImagePreview:', err) }
+}
+
+// ── VIDEO render loop ─────────────────────────────────────────────────────
+const stopRaf = () => {
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null }
+}
+
+const drawVideoFrame = async () => {
+  const video  = hiddenVideoRef.value
+  const canvas = canvasRef.value
+  if (!video || !canvas || !video.videoWidth) return
+
+  const maxW  = 700
+  const scale = Math.min(1, maxW / video.videoWidth)
+  const dispW = Math.round(video.videoWidth  * scale)
+  const dispH = Math.round(video.videoHeight * scale)
+
+  if (canvas.width !== dispW)  canvas.width  = dispW
+  if (canvas.height !== dispH) canvas.height = dispH
+
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(video, 0, 0, dispW, dispH)
+
+  const wm = await getWmImg()
+  if (wm) {
+    const wmMaxW  = Math.round(dispW * 0.15)
+    const wmScale = wmMaxW / wm.naturalWidth
+    const wmW     = Math.round(wm.naturalWidth  * wmScale)
+    const wmH     = Math.round(wm.naturalHeight * wmScale)
+    const pad     = Math.max(8, Math.round(15 * scale))
+    const { left, top } = calcWmPosition(store.watermarkPosition, dispW, dispH, wmW, wmH, pad)
+    ctx.drawImage(wm, left, top, wmW, wmH)
   }
 }
 
-// ── VIDEO preview ───────────────────────────────────────────────────��─────
-const captureVideoFrame = async () => {
-  await nextTick()
-  const video = hiddenVideoRef.value
-  if (!video || !video.videoWidth || !video.videoHeight) {
-    console.warn('captureVideoFrame: video chưa sẵn sàng', video?.readyState)
-    return
+const startRafLoop = () => {
+  stopRaf()
+  const loop = async () => {
+    await drawVideoFrame()
+    rafId = requestAnimationFrame(loop)
   }
-  await drawLogoOnCanvas(video, video.videoWidth, video.videoHeight)
+  rafId = requestAnimationFrame(loop)
 }
 
-// Event handler khi video decode được frame đầu tiên
-const onVideoCanPlay = async () => {
-  videoReady.value = true
-  await captureVideoFrame()
-}
-
-// Nút "Cập nhật frame" — người dùng tua rồi bấm
-const onRefreshFrame = async () => {
+// ── Video event handlers ──────────────────────────────────────────────────
+const onVideoCanPlay = () => {
   const video = hiddenVideoRef.value
   if (!video) return
-  // Đồng bộ currentTime của hidden video với video đang hiển thị ở VideoUploader
-  // (không cần vì cả 2 dùng cùng src, nhưng hidden video có thể ở frame khác)
-  // → capture thẳng frame hiện tại của hidden video
-  await captureVideoFrame()
+  videoReady.value  = true
+  duration.value    = video.duration || 0
+  volume.value      = video.volume
+  isMuted.value     = video.muted
+  startRafLoop()
+}
+
+// Sync time display
+const setupVideoEvents = () => {
+  const video = hiddenVideoRef.value
+  if (!video) return
+  video.addEventListener('timeupdate', () => { currentTime.value = video.currentTime })
+  video.addEventListener('durationchange', () => { duration.value = video.duration })
+  video.addEventListener('play',  () => { isPlaying.value = true  })
+  video.addEventListener('pause', () => { isPlaying.value = false })
+  video.addEventListener('ended', () => { isPlaying.value = false })
+  video.addEventListener('volumechange', () => {
+    volume.value  = video.volume
+    isMuted.value = video.muted
+  })
+}
+
+// ── Controls ──────────────────────────────────────────────────────────────
+const togglePlay = () => {
+  const video = hiddenVideoRef.value
+  if (!video) return
+  video.paused ? video.play() : video.pause()
+}
+
+const onSeek = (e) => {
+  const video = hiddenVideoRef.value
+  if (!video) return
+  video.currentTime = parseFloat(e.target.value)
+}
+
+const toggleMute = () => {
+  const video = hiddenVideoRef.value
+  if (!video) return
+  video.muted = !video.muted
+}
+
+const onVolume = (e) => {
+  const video = hiddenVideoRef.value
+  if (!video) return
+  video.volume = parseFloat(e.target.value)
+  video.muted  = video.volume === 0
 }
 
 // ── Watches ───────────────────────────────────────────────────────────────
@@ -245,14 +363,15 @@ watch(() => store.previewUrls?.length, (len) => {
   if (!isVideo.value && len > 0) drawImagePreview()
 })
 
-watch(() => store.watermarkUrl, () => {
-  if (isVideo.value) { if (videoReady.value) captureVideoFrame() }
-  else               { if (store.previewUrls?.[currentIndex.value]) drawImagePreview() }
+watch(() => store.watermarkUrl, async () => {
+  wmImg = null; wmImgSrc = ''   // invalidate cache
+  if (!isVideo.value && store.previewUrls?.[currentIndex.value]) drawImagePreview()
+  // video loop tự re-draw frame tiếp theo với wm mới
 })
 
 watch(() => store.watermarkPosition, () => {
-  if (isVideo.value) { if (videoReady.value) captureVideoFrame() }
-  else               { if (store.previewUrls?.[currentIndex.value]) drawImagePreview() }
+  if (!isVideo.value && store.previewUrls?.[currentIndex.value]) drawImagePreview()
+  // video loop tự re-draw
 })
 
 watch(currentIndex, () => {
@@ -264,13 +383,20 @@ watch(() => store.selectedFiles?.length, (len) => {
     currentIndex.value = Math.max(0, len - 1)
 })
 
-// Reset khi video mới được chọn
-watch(() => store.previewUrl, (url) => {
+// Reset khi video mới
+watch(() => store.previewUrl, async (url) => {
   if (!isVideo.value) return
-  videoReady.value = false
-  // hiddenVideoRef sẽ tự load src mới vì bind :src
-  // event @canplay sẽ tự fire khi ready
+  stopRaf()
+  videoReady.value  = false
+  isPlaying.value   = false
+  currentTime.value = 0
+  duration.value    = 0
+  await nextTick()
+  setupVideoEvents()
+  // @canplay sẽ tự fire khi video sẵn sàng
 })
+
+onUnmounted(() => stopRaf())
 </script>
 
 <style scoped>
@@ -333,15 +459,8 @@ watch(() => store.previewUrl, (url) => {
 .wm-position-name { margin: 6px 0 0; font-size: 11px; color: #3b82f6; font-weight: 600; text-align: center; }
 
 /* Preview */
-.wm-preview-section { margin-top: 16px; position: relative; }
-.wm-preview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-.wm-preview-title { font-size: 12px; color: #64748b; margin: 0; }
-.wm-refresh-btn {
-  background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px;
-  padding: 4px 10px; font-size: 12px; color: #475569; cursor: pointer; transition: all 0.15s;
-}
-.wm-refresh-btn:hover { background: #3b82f6; color: white; border-color: #3b82f6; }
-.wm-preview-hint { font-size: 11px; color: #94a3b8; margin: 0 0 8px; }
+.wm-preview-section { margin-top: 16px; }
+.wm-preview-title { font-size: 12px; color: #64748b; margin: 0 0 8px; }
 
 .wm-preview-nav { display: flex; align-items: center; gap: 6px; }
 .wm-nav-btn {
@@ -353,6 +472,7 @@ watch(() => store.previewUrl, (url) => {
 .wm-nav-btn:hover:not(:disabled) { background: #3b82f6; color: white; }
 .wm-nav-btn:disabled { opacity: 0.3; cursor: default; }
 .wm-nav-counter { font-size: 12px; color: #64748b; font-weight: 600; min-width: 36px; text-align: center; }
+.wm-preview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
 .wm-preview-filename {
   font-size: 11px; color: #94a3b8; margin: 0 0 8px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -360,5 +480,52 @@ watch(() => store.previewUrl, (url) => {
 .wm-canvas {
   max-width: 100%; border-radius: 6px; margin: 0 auto;
   border: 1px solid #e2e8f0; display: block;
+}
+
+/* Video canvas wrapper + custom controls */
+.vc-wrap {
+  position: relative;
+  background: #000;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.vc-canvas {
+  width: 100%;
+  border: none;
+  border-radius: 0;
+  display: block;
+}
+.vc-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+}
+.vc-btn {
+  background: none; border: none; color: #ffffff; cursor: pointer;
+  font-size: 16px; padding: 0 2px; line-height: 1;
+  flex-shrink: 0;
+}
+.vc-seek {
+  flex: 1;
+  height: 4px;
+  accent-color: #ffffff;
+  cursor: pointer;
+}
+.vc-time {
+  font-size: 11px;
+  color: #cbd5e1;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.vc-volume {
+  width: 60px;
+  height: 4px;
+  accent-color: #ffffff;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 </style>
