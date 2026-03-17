@@ -74,11 +74,27 @@
     <div v-if="isVideo && store.selectedFile" class="wm-preview-section">
       <div class="wm-preview-header">
         <p class="wm-preview-title">👁 Preview frame với Logo:</p>
-        <button class="wm-refresh-btn" @click="captureVideoFrame">
+        <button class="wm-refresh-btn" @click="onRefreshFrame">
           🔄 Cập nhật frame
         </button>
       </div>
       <p class="wm-preview-hint">▶ Tua video đến frame muốn xem rồi nhấn "Cập nhật frame"</p>
+
+      <!--
+        ✅ Video ẩn đúng cách:
+        - visibility:hidden + position:absolute → browser VẪN decode frame
+        - display:none → browser KHÔNG decode frame (bug gốc)
+        - width/height > 0 bắt buộc để browser xử lý
+      -->
+      <video
+        ref="hiddenVideoRef"
+        :src="store.previewUrl"
+        preload="auto"
+        style="position:absolute; visibility:hidden; width:1px; height:1px; pointer-events:none;"
+        @canplay="onVideoCanPlay"
+        crossorigin="anonymous"
+      ></video>
+
       <canvas ref="canvasRef" class="wm-canvas"></canvas>
     </div>
   </div>
@@ -89,6 +105,7 @@ import { ref, computed, watch, nextTick } from 'vue'
 
 const props = defineProps({
   store:    { type: Object, required: true },
+  // Giữ prop này để không break App.vue, nhưng không dùng nữa
   videoRef: { type: Object, default: null },
 })
 const store = props.store
@@ -96,10 +113,12 @@ const store = props.store
 // Phát hiện image hay video store
 const isVideo = computed(() => 'selectedFile' in store && !('selectedFiles' in store))
 
-const inputRef     = ref(null)
-const canvasRef    = ref(null)
-const isDragging   = ref(false)
-const currentIndex = ref(0)
+const inputRef       = ref(null)
+const canvasRef      = ref(null)
+const hiddenVideoRef = ref(null)
+const isDragging     = ref(false)
+const currentIndex   = ref(0)
+const videoReady     = ref(false)  // true khi video đã decode được frame
 
 const positionGrid = [
   { value: 'top-left',      label: 'Trên trái',  icon: '↖' },
@@ -128,17 +147,7 @@ const onDrop = (e) => {
   if (file) store.setWatermark(file)
 }
 
-// ── Helpers ───────────────────────────────��───────────────────────────────
-
-// Unwrap videoRef đúng cách:
-// App.vue truyền videoUploaderRef (Ref<ComponentInstance>)
-// ComponentInstance.videoRef = Ref<HTMLVideoElement>  (từ defineExpose)
-const getVideoEl = () =>
-  props.videoRef?.value?.videoRef?.value   // ✅ đường chính xác
-  ?? props.videoRef?.videoRef?.value        // fallback nếu đã unwrap 1 lần
-  ?? props.videoRef?.value                  // fallback khác
-  ?? props.videoRef                         // fallback cuối
-
+// ── Canvas helpers ────────────────────────────────────────────────────────
 const calcWmPosition = (position, canvasW, canvasH, wmW, wmH, padding) => {
   const cx = Math.round((canvasW - wmW) / 2)
   const cy = Math.round((canvasH - wmH) / 2)
@@ -204,19 +213,31 @@ const drawImagePreview = async () => {
   }
 }
 
-// ── VIDEO preview ─────────────────────────────────────────────────────────
+// ── VIDEO preview ───────────────────────────────────────────────────��─────
 const captureVideoFrame = async () => {
   await nextTick()
-  const video = getVideoEl()
-  if (!video || !(video instanceof HTMLVideoElement)) {
-    console.warn('captureVideoFrame: không tìm thấy video element')
-    return
-  }
-  if (!video.videoWidth || !video.videoHeight) {
-    console.warn('captureVideoFrame: video chưa có kích thước')
+  const video = hiddenVideoRef.value
+  if (!video || !video.videoWidth || !video.videoHeight) {
+    console.warn('captureVideoFrame: video chưa sẵn sàng', video?.readyState)
     return
   }
   await drawLogoOnCanvas(video, video.videoWidth, video.videoHeight)
+}
+
+// Event handler khi video decode được frame đầu tiên
+const onVideoCanPlay = async () => {
+  videoReady.value = true
+  await captureVideoFrame()
+}
+
+// Nút "Cập nhật frame" — người dùng tua rồi bấm
+const onRefreshFrame = async () => {
+  const video = hiddenVideoRef.value
+  if (!video) return
+  // Đồng bộ currentTime của hidden video với video đang hiển thị ở VideoUploader
+  // (không cần vì cả 2 dùng cùng src, nhưng hidden video có thể ở frame khác)
+  // → capture thẳng frame hiện tại của hidden video
+  await captureVideoFrame()
 }
 
 // ── Watches ───────────────────────────────────────────────────────────────
@@ -225,12 +246,12 @@ watch(() => store.previewUrls?.length, (len) => {
 })
 
 watch(() => store.watermarkUrl, () => {
-  if (isVideo.value) { if (store.selectedFile) captureVideoFrame() }
+  if (isVideo.value) { if (videoReady.value) captureVideoFrame() }
   else               { if (store.previewUrls?.[currentIndex.value]) drawImagePreview() }
 })
 
 watch(() => store.watermarkPosition, () => {
-  if (isVideo.value) { if (store.selectedFile) captureVideoFrame() }
+  if (isVideo.value) { if (videoReady.value) captureVideoFrame() }
   else               { if (store.previewUrls?.[currentIndex.value]) drawImagePreview() }
 })
 
@@ -243,45 +264,12 @@ watch(() => store.selectedFiles?.length, (len) => {
     currentIndex.value = Math.max(0, len - 1)
 })
 
-// Video: tự capture frame khi video vừa được chọn
-watch(() => store.previewUrl, async (url) => {
-  if (!isVideo.value || !url) return
-  await nextTick()
-
-  // Thử ngay nếu frame đã sẵn sàng (readyState >= 2 = HAVE_CURRENT_DATA)
-  const tryNow = async () => {
-    const v = getVideoEl()
-    if (v instanceof HTMLVideoElement && v.videoWidth > 0 && v.readyState >= 2) {
-      await captureVideoFrame()
-      return true
-    }
-    return false
-  }
-
-  if (await tryNow()) return
-
-  // Chưa ready → lắng nghe event loadeddata
-  let done = false
-  const v = getVideoEl()
-
-  const onLoaded = async () => {
-    if (done) return
-    done = true
-    await captureVideoFrame()
-  }
-
-  if (v instanceof HTMLVideoElement) {
-    v.addEventListener('loadeddata', onLoaded, { once: true })
-  }
-
-  // Fallback poll 20 lần × 300ms phòng event miss
-  let tries = 0
-  const poll = async () => {
-    if (done) return
-    if (await tryNow()) { done = true; return }
-    if (tries++ < 20) setTimeout(poll, 300)
-  }
-  poll()
+// Reset khi video mới được chọn
+watch(() => store.previewUrl, (url) => {
+  if (!isVideo.value) return
+  videoReady.value = false
+  // hiddenVideoRef sẽ tự load src mới vì bind :src
+  // event @canplay sẽ tự fire khi ready
 })
 </script>
 
@@ -345,7 +333,7 @@ watch(() => store.previewUrl, async (url) => {
 .wm-position-name { margin: 6px 0 0; font-size: 11px; color: #3b82f6; font-weight: 600; text-align: center; }
 
 /* Preview */
-.wm-preview-section { margin-top: 16px; }
+.wm-preview-section { margin-top: 16px; position: relative; }
 .wm-preview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
 .wm-preview-title { font-size: 12px; color: #64748b; margin: 0; }
 .wm-refresh-btn {
