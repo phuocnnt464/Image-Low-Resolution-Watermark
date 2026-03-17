@@ -1,119 +1,90 @@
-const ffmpeg      = require('fluent-ffmpeg');
-const ffmpegPath  = require('ffmpeg-static');
-const fs          = require('fs');
-const path        = require('path');
-require('dotenv').config();
+const ffmpeg     = require('fluent-ffmpeg')
+const ffmpegPath = require('ffmpeg-static')
+const fs         = require('fs')
+const path       = require('path')
+require('dotenv').config()
 
-ffmpeg.setFfmpegPath(ffmpegPath);
+ffmpeg.setFfmpegPath(ffmpegPath)
 
-const DEFAULT_WATERMARK_PATH = process.env.WATERMARK_PATH
-  || path.resolve(__dirname, '../../assets/watermark.png');
+const DEFAULT_WATERMARK = process.env.WATERMARK_PATH
+  || path.resolve(__dirname, '../../assets/watermark.png')
 
-const VIDEO_PRESETS = {
-  'Original': { videoBitrate: null,     audioBitrate: null,   scale: null  },
-  '4K':       { videoBitrate: '20000k', audioBitrate: '320k', scale: 3840  },
-  '1080p':    { videoBitrate: '8000k',  audioBitrate: '192k', scale: 1920  },
-  '720p':     { videoBitrate: '4000k',  audioBitrate: '128k', scale: 1280  },
-  '480p':     { videoBitrate: '2000k',  audioBitrate: '96k',  scale: 854   },
-  '360p':     { videoBitrate: '1000k',  audioBitrate: '64k',  scale: 640   },
-  '240p':     { videoBitrate: '500k',   audioBitrate: '48k',  scale: 426   },
-};
+// Các preset bitrate — null = giữ nguyên gốc
+const PRESETS = {
+  'Original': { video: null,      audio: null,    scale: null },
+  '4K':       { video: '20000k',  audio: '320k',  scale: 3840 },
+  '1080p':    { video: '8000k',   audio: '192k',  scale: 1920 },
+  '720p':     { video: '4000k',   audio: '128k',  scale: 1280 },
+  '480p':     { video: '2000k',   audio: '96k',   scale: 854  },
+  '360p':     { video: '1000k',   audio: '64k',   scale: 640  },
+  '240p':     { video: '500k',    audio: '48k',   scale: 426  },
+}
 
-const processVideo = (
-  inputPath,
-  outputPath,
-  bitratePreset     = '720p',
-  watermarkPath     = null,
-  watermarkPosition = 'bottom-left'
-) => {
+// Vị trí overlay watermark trong FFmpeg expression
+const OVERLAY_POSITIONS = {
+  'top-left':      'x=15:y=15',
+  'top-center':    'x=(W-w)/2:y=15',
+  'top-right':     'x=W-w-15:y=15',
+  'center-left':   'x=15:y=(H-h)/2',
+  'center':        'x=(W-w)/2:y=(H-h)/2',
+  'center-right':  'x=W-w-15:y=(H-h)/2',
+  'bottom-left':   'x=15:y=H-h-15',
+  'bottom-center': 'x=(W-w)/2:y=H-h-15',
+  'bottom-right':  'x=W-w-15:y=H-h-15',
+}
+
+const processVideo = (inputPath, outputPath, preset = '720p', wmPath = null, wmPosition = 'bottom-left') => {
   return new Promise((resolve, reject) => {
-    const wmPath  = watermarkPath || DEFAULT_WATERMARK_PATH;
-    const preset  = VIDEO_PRESETS[bitratePreset] ?? VIDEO_PRESETS['720p'];
-    const { videoBitrate, audioBitrate, scale } = preset;
+    const wm          = wmPath || DEFAULT_WATERMARK
+    const hasWm       = fs.existsSync(wm)
+    const { video, audio, scale } = PRESETS[preset] ?? PRESETS['720p']
+    const overlayExpr = OVERLAY_POSITIONS[wmPosition] || OVERLAY_POSITIONS['bottom-left']
 
-    const overlayMap = {
-      'top-left':      'x=15:y=15',
-      'top-center':    'x=(W-w)/2:y=15',
-      'top-right':     'x=W-w-15:y=15',
-      'center-left':   'x=15:y=(H-h)/2',
-      'center':        'x=(W-w)/2:y=(H-h)/2',
-      'center-right':  'x=W-w-15:y=(H-h)/2',
-      'bottom-left':   'x=15:y=H-h-15',
-      'bottom-center': 'x=(W-w)/2:y=H-h-15',
-      'bottom-right':  'x=W-w-15:y=H-h-15',
-    };
-    const overlayExpr = overlayMap[watermarkPosition] || overlayMap['bottom-left'];
+    const cmd = ffmpeg(inputPath)
+    const filters = []
 
-    const hasWatermark = fs.existsSync(wmPath);
-
-    let cmd = ffmpeg(inputPath);
-
-    const filters = [];
-
+    // Bước 1: Scale video (hoặc passthrough nếu Original)
     if (scale !== null) {
-      // Escape dấu phẩy trong FFmpeg filter expression
-      filters.push(`[0:v]scale=w=if(gt(iw\\,${scale})\\,${scale}\\,iw):h=-2[scaled]`);
+      filters.push(`[0:v]scale=w=if(gt(iw\\,${scale})\\,${scale}\\,iw):h=-2[scaled]`)
     } else {
-      // Original: dùng 'null' passthrough filter để decode frame (không phải stream copy)
-      filters.push('[0:v]null[scaled]');
+      filters.push('[0:v]null[scaled]')
     }
 
-    if (hasWatermark) {
-      // trunc(iw*0.15/2)*2 → width/height chia hết 2, tránh lỗi libx264
-      filters.push('[1:v]scale=trunc(iw*0.15/2)*2:-2[wm]');
-      filters.push(`[scaled][wm]overlay=${overlayExpr}[out]`);
-      cmd.input(wmPath);
+    // Bước 2: Thêm watermark logo nếu có
+    if (hasWm) {
+      cmd.input(wm)
+      // scale2ref: scale logo = 20% chiều rộng video (thay vì 15% của chính logo)
+      filters.push('[1:v][scaled]scale2ref=w=trunc(main_w*0.20/2)*2:h=trunc(ow/a/2)*2[wm][vid]')
+      filters.push(`[vid][wm]overlay=${overlayExpr}[out]`)
     } else {
-      // QUAN TRỌNG: dùng 'null' filter, KHÔNG phải 'copy'
-      // 'copy' không tồn tại trong filtergraph context → FFmpeg lỗi "Filter copy not found"
-      filters.push('[scaled]null[out]');
+      filters.push('[scaled]null[out]')
     }
 
-    cmd.complexFilter(filters, 'out');
+    cmd.complexFilter(filters, 'out')
 
-    cmd.outputOptions([
-      '-c:v libx264',
-      '-preset fast',
-      '-movflags +faststart',
-      '-pix_fmt yuv420p',
-    ]);
-
-    if (videoBitrate) {
-      cmd.outputOptions([
-        `-b:v ${videoBitrate}`,
-        `-maxrate ${videoBitrate}`,
-        `-bufsize ${videoBitrate}`,
-      ]);
+    // Bước 3: Video codec
+    cmd.outputOptions(['-c:v libx264', '-preset fast', '-pix_fmt yuv420p', '-movflags +faststart'])
+    if (video) {
+      cmd.outputOptions([`-b:v ${video}`, `-maxrate ${video}`, `-bufsize ${video}`])
     }
 
-    if (audioBitrate) {
-      cmd.outputOptions(['-c:a aac', `-b:a ${audioBitrate}`]);
-    } else {
-      // Original: re-encode audio sang AAC để tương thích container mp4
-      cmd.outputOptions(['-c:a aac', '-b:a 192k']);
-    }
+    // Bước 4: Audio — PHẢI map thủ công vì complexFilter không tự giữ audio
+    cmd.outputOptions(['-map 0:a?', '-c:a aac', `-b:a ${audio || '192k'}`])
 
     cmd
       .output(outputPath)
-      .on('start', (cmdLine) => console.log(`[FFmpeg] start: ${cmdLine.slice(0, 140)}...`))
-      .on('progress', (p) => {
-        if (p.percent) process.stdout.write(`\r[FFmpeg] ${p.percent.toFixed(1)}%`);
-      })
+      .on('start', cmd  => console.log('[FFmpeg] start:', cmd.slice(0, 120) + '...'))
+      .on('progress', p => p.percent && process.stdout.write(`\r[FFmpeg] ${p.percent.toFixed(1)}%`))
       .on('end', () => {
-        console.log(`\n[FFmpeg] done → ${outputPath}`);
-        try {
-          const stat = fs.statSync(outputPath);
-          resolve({ processedSize: stat.size, bitratePreset });
-        } catch (e) {
-          reject(e);
-        }
+        console.log(`\n[FFmpeg] done → ${outputPath}`)
+        resolve({ processedSize: fs.statSync(outputPath).size, preset })
       })
-      .on('error', (err) => {
-        console.error('[FFmpeg] error:', err.message);
-        reject(err);
+      .on('error', err => {
+        console.error('[FFmpeg] error:', err.message)
+        reject(err)
       })
-      .run();
-  });
-};
+      .run()
+  })
+}
 
-module.exports = { processVideo };
+module.exports = { processVideo }
