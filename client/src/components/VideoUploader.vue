@@ -27,13 +27,12 @@
     <div v-else class="video-preview">
 
       <div class="vp-wrap">
-        <!-- ✅ ref="videoRef" để expose ra ngoài cho WatermarkUploader capture frame -->
         <video
           ref="videoRef"
           :key="store.previewUrl"
           :src="store.previewUrl"
           controls
-          preload="metadata"
+          preload="auto"
           class="vp-player"
         ></video>
         <button class="vp-remove" @click="store.clearVideo" title="Xóa video">✕</button>
@@ -71,8 +70,6 @@
         </div>
       </div>
 
-      <!-- ✅ Error và Download button đã chuyển ra App.vue — KHÔNG còn ở đây -->
-
     </div>
   </div>
 </template>
@@ -81,12 +78,11 @@
 import { ref, computed } from 'vue'
 import { useVideoStore } from '../stores/videoStore'
 
-const store     = useVideoStore()
-const fileInput = ref(null)
-const videoRef  = ref(null)   // ← expose để App/WatermarkUploader dùng
+const store      = useVideoStore()
+const fileInput  = ref(null)
+const videoRef   = ref(null)
 const isDragging = ref(false)
 
-// ── Expose videoRef ra ngoài ─────────────────────────────────────────────
 defineExpose({ videoRef })
 
 const bitratePresets = [

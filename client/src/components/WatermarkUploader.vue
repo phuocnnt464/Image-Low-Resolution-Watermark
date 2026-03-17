@@ -70,7 +70,7 @@
       <canvas ref="canvasRef" class="wm-canvas"></canvas>
     </div>
 
-    <!-- VIDEO preview — dùng videoRef từ VideoUploader, KHÔNG dùng video ẩn -->
+    <!-- VIDEO preview -->
     <div v-if="isVideo && store.selectedFile" class="wm-preview-section">
       <div class="wm-preview-header">
         <p class="wm-preview-title">👁 Preview frame với Logo:</p>
@@ -79,7 +79,6 @@
         </button>
       </div>
       <p class="wm-preview-hint">▶ Tua video đến frame muốn xem rồi nhấn "Cập nhật frame"</p>
-      <!-- ✅ KHÔNG có <video> ẩn ở đây nữa — dùng trực tiếp videoRef từ VideoUploader -->
       <canvas ref="canvasRef" class="wm-canvas"></canvas>
     </div>
   </div>
@@ -90,8 +89,6 @@ import { ref, computed, watch, nextTick } from 'vue'
 
 const props = defineProps({
   store:    { type: Object, required: true },
-  // ✅ videoRef: HTMLVideoElement được expose từ VideoUploader qua defineExpose
-  // Chỉ truyền khi dùng ở video tab
   videoRef: { type: Object, default: null },
 })
 const store = props.store
@@ -131,7 +128,17 @@ const onDrop = (e) => {
   if (file) store.setWatermark(file)
 }
 
-// ── Canvas helpers ────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────��───────────────────────────────
+
+// Unwrap videoRef đúng cách:
+// App.vue truyền videoUploaderRef (Ref<ComponentInstance>)
+// ComponentInstance.videoRef = Ref<HTMLVideoElement>  (từ defineExpose)
+const getVideoEl = () =>
+  props.videoRef?.value?.videoRef?.value   // ✅ đường chính xác
+  ?? props.videoRef?.videoRef?.value        // fallback nếu đã unwrap 1 lần
+  ?? props.videoRef?.value                  // fallback khác
+  ?? props.videoRef                         // fallback cuối
+
 const calcWmPosition = (position, canvasW, canvasH, wmW, wmH, padding) => {
   const cx = Math.round((canvasW - wmW) / 2)
   const cy = Math.round((canvasH - wmH) / 2)
@@ -197,58 +204,84 @@ const drawImagePreview = async () => {
   }
 }
 
-// ── VIDEO preview: capture từ videoRef của VideoUploader ──────────────────
-// ✅ Dùng trực tiếp <video> đang hiển thị — browser luôn có frame sẵn
+// ── VIDEO preview ─────────────────────────────────────────────────────────
 const captureVideoFrame = async () => {
   await nextTick()
-  // props.videoRef là kết quả của defineExpose({ videoRef }) — là một Ref<HTMLVideoElement>
-  const video = props.videoRef?.videoRef?.value ?? props.videoRef?.value ?? props.videoRef
+  const video = getVideoEl()
   if (!video || !(video instanceof HTMLVideoElement)) {
     console.warn('captureVideoFrame: không tìm thấy video element')
     return
   }
   if (!video.videoWidth || !video.videoHeight) {
-    console.warn('captureVideoFrame: video chưa có kích thước (chưa load)')
+    console.warn('captureVideoFrame: video chưa có kích thước')
     return
   }
   await drawLogoOnCanvas(video, video.videoWidth, video.videoHeight)
 }
 
 // ── Watches ───────────────────────────────────────────────────────────────
-watch(() => store.previewUrls?.length, (len) => { if (!isVideo.value && len > 0) drawImagePreview() })
+watch(() => store.previewUrls?.length, (len) => {
+  if (!isVideo.value && len > 0) drawImagePreview()
+})
 
 watch(() => store.watermarkUrl, () => {
   if (isVideo.value) { if (store.selectedFile) captureVideoFrame() }
   else               { if (store.previewUrls?.[currentIndex.value]) drawImagePreview() }
 })
+
 watch(() => store.watermarkPosition, () => {
   if (isVideo.value) { if (store.selectedFile) captureVideoFrame() }
   else               { if (store.previewUrls?.[currentIndex.value]) drawImagePreview() }
 })
+
 watch(currentIndex, () => {
   if (!isVideo.value && store.previewUrls?.[currentIndex.value]) drawImagePreview()
 })
+
 watch(() => store.selectedFiles?.length, (len) => {
   if (len !== undefined && currentIndex.value >= len)
     currentIndex.value = Math.max(0, len - 1)
 })
 
-// Video: tự capture frame đầu khi video vừa được chọn
+// Video: tự capture frame khi video vừa được chọn
 watch(() => store.previewUrl, async (url) => {
   if (!isVideo.value || !url) return
-  // Chờ một chút để VideoUploader render xong video element
   await nextTick()
-  // Thử lại vài lần nếu video chưa load
-  let tries = 0
-  const tryCapture = async () => {
-    const video = props.videoRef?.videoRef?.value ?? props.videoRef?.value ?? props.videoRef
-    if (video instanceof HTMLVideoElement && video.videoWidth > 0) {
+
+  // Thử ngay nếu frame đã sẵn sàng (readyState >= 2 = HAVE_CURRENT_DATA)
+  const tryNow = async () => {
+    const v = getVideoEl()
+    if (v instanceof HTMLVideoElement && v.videoWidth > 0 && v.readyState >= 2) {
       await captureVideoFrame()
-    } else if (tries++ < 10) {
-      setTimeout(tryCapture, 200)
+      return true
     }
+    return false
   }
-  tryCapture()
+
+  if (await tryNow()) return
+
+  // Chưa ready → lắng nghe event loadeddata
+  let done = false
+  const v = getVideoEl()
+
+  const onLoaded = async () => {
+    if (done) return
+    done = true
+    await captureVideoFrame()
+  }
+
+  if (v instanceof HTMLVideoElement) {
+    v.addEventListener('loadeddata', onLoaded, { once: true })
+  }
+
+  // Fallback poll 20 lần × 300ms phòng event miss
+  let tries = 0
+  const poll = async () => {
+    if (done) return
+    if (await tryNow()) { done = true; return }
+    if (tries++ < 20) setTimeout(poll, 300)
+  }
+  poll()
 })
 </script>
 
