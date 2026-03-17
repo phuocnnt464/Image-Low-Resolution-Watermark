@@ -1,7 +1,7 @@
 <template>
   <div class="video-section">
 
-    <!-- ── Drop zone ── -->
+    <!-- Drop zone -->
     <div
       v-if="!store.selectedFile"
       class="uploader"
@@ -23,13 +23,13 @@
       <p class="uploader__hint">MP4, MOV, AVI, MKV, WEBM — tối đa 2 GB</p>
     </div>
 
-    <!-- ── Sau khi đã chọn video ── -->
+    <!-- Sau khi đã chọn video -->
     <div v-else class="video-preview">
 
-      <!-- ✅ FIX: dùng :key="store.previewUrl" — browser tự reload khi src thay đổi -->
-      <!-- KHÔNG cần watch + videoRef.load() nữa -->
       <div class="vp-wrap">
+        <!-- ✅ ref="videoRef" để expose ra ngoài cho WatermarkUploader capture frame -->
         <video
+          ref="videoRef"
           :key="store.previewUrl"
           :src="store.previewUrl"
           controls
@@ -38,12 +38,13 @@
         ></video>
         <button class="vp-remove" @click="store.clearVideo" title="Xóa video">✕</button>
       </div>
+
       <p class="vp-filename">
         📁 {{ store.selectedFile.name }}
         <span class="vp-filesize">({{ formatSize(store.selectedFile.size) }})</span>
       </p>
 
-      <!-- ── Bitrate preset ── -->
+      <!-- Bitrate preset -->
       <div class="resolution-control">
         <div class="resolution-control__header">
           <span class="resolution-control__title">📡 Preset Bitrate</span>
@@ -70,18 +71,7 @@
         </div>
       </div>
 
-      <!-- Error -->
-      <p v-if="store.errorMessage" class="error">⚠️ {{ store.errorMessage }}</p>
-
-      <!-- Download button -->
-      <button
-        class="btn btn--primary"
-        :disabled="store.isProcessing"
-        @click="store.processAndDownload"
-      >
-        <span v-if="store.isProcessing">⏳ Đang xử lý video...</span>
-        <span v-else>Xử lý & Tải xuống video</span>
-      </button>
+      <!-- ✅ Error và Download button đã chuyển ra App.vue — KHÔNG còn ở đây -->
 
     </div>
   </div>
@@ -93,9 +83,12 @@ import { useVideoStore } from '../stores/videoStore'
 
 const store     = useVideoStore()
 const fileInput = ref(null)
+const videoRef  = ref(null)   // ← expose để App/WatermarkUploader dùng
 const isDragging = ref(false)
 
-// ── Bitrate presets ────────────────────────────────────────────────────────
+// ── Expose videoRef ra ngoài ─────────────────────────────────────────────
+defineExpose({ videoRef })
+
 const bitratePresets = [
   { value: 'Original', label: 'Gốc (Original)', sub: 'Giữ nguyên', desc: 'Không nén, giữ nguyên bitrate gốc',     tier: 'high' },
   { value: '4K',       label: '4K',             sub: '20 Mbps',    desc: '4K Ultra HD — chất lượng rất cao',       tier: 'high' },
@@ -130,7 +123,6 @@ const onDrop = (e) => {
 </script>
 
 <style scoped>
-/* ── Drop zone ── */
 .uploader {
   border: 2px dashed #94a3b8;
   border-radius: 12px;
@@ -146,10 +138,8 @@ const onDrop = (e) => {
 .uploader__link { color: #3b82f6; font-weight: 500; }
 .uploader__hint { font-size: 13px; color: #94a3b8; margin: 0; }
 
-/* ── Video preview wrapper ── */
 .video-preview { display: flex; flex-direction: column; gap: 12px; }
 
-/* ── Video player ── */
 .vp-wrap {
   position: relative;
   background: #000;
@@ -179,7 +169,6 @@ const onDrop = (e) => {
 .vp-filename { font-size: 13px; color: #475569; }
 .vp-filesize { color: #94a3b8; }
 
-/* ── Bitrate preset ── */
 .resolution-control {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -218,15 +207,4 @@ const onDrop = (e) => {
 .res-btn--tier-high .res-btn__sub { color: #86efac; }
 .res-btn--tier-mid  .res-btn__sub { color: #93c5fd; }
 .res-btn--tier-low  .res-btn__sub { color: #fdba74; }
-
-/* ── Shared ── */
-.error { color: #ef4444; font-size: 14px; }
-.btn {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 12px 24px; border-radius: 8px; border: none;
-  cursor: pointer; font-size: 15px; font-weight: 600; transition: all 0.2s;
-}
-.btn--primary { background: #3b82f6; color: white; width: 100%; justify-content: center; }
-.btn--primary:hover:not(:disabled) { background: #2563eb; }
-.btn--primary:disabled { background: #93c5fd; cursor: not-allowed; }
 </style>

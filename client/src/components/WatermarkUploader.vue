@@ -8,7 +8,6 @@
     </div>
 
     <div class="wm-controls-row">
-
       <div class="wm-body">
         <div
           class="wm-drop"
@@ -35,17 +34,12 @@
             <p class="wm-drop__name">{{ store.watermarkFile.name }}</p>
           </template>
         </div>
-
-        <button
-          v-if="store.watermarkFile"
-          class="wm-clear"
-          @click.stop="store.clearWatermark()"
-        >
+        <button v-if="store.watermarkFile" class="wm-clear" @click.stop="store.clearWatermark()">
           🗑 Dùng Logo mặc định
         </button>
       </div>
 
-      <!-- 1/3 phải: chọn vị trí watermark -->
+      <!-- Position grid -->
       <div class="wm-position-section">
         <p class="wm-position-label">📍 Vị trí:</p>
         <div class="wm-position-grid">
@@ -60,16 +54,9 @@
         </div>
         <p class="wm-position-name">{{ currentPositionLabel }}</p>
       </div>
-
     </div>
 
-    <!-- ══════════════════════════════════════════════════════════════════════
-         Preview section — tự chọn chế độ:
-         • isVideo = false  → canvas từ store.previewUrls[] (image tab)
-         • isVideo = true   → capture frame video hiện tại (video tab)
-    ═══════════════════════════════════════════════════════════════════════ -->
-
-    <!-- IMAGE preview (giữ nguyên logic cũ) -->
+    <!-- IMAGE preview -->
     <div v-if="!isVideo && store.previewUrls?.length > 0" class="wm-preview-section">
       <div class="wm-preview-header">
         <p class="wm-preview-title">👁 Preview ảnh với Logo:</p>
@@ -83,28 +70,18 @@
       <canvas ref="canvasRef" class="wm-canvas"></canvas>
     </div>
 
-    <!-- VIDEO preview — hiện khi video đã được chọn -->
+    <!-- VIDEO preview — dùng videoRef từ VideoUploader, KHÔNG dùng video ẩn -->
     <div v-if="isVideo && store.selectedFile" class="wm-preview-section">
       <div class="wm-preview-header">
         <p class="wm-preview-title">👁 Preview frame với Logo:</p>
-        <button class="wm-refresh-btn" @click="captureVideoFrame" title="Cập nhật preview từ frame hiện tại">
+        <button class="wm-refresh-btn" @click="captureVideoFrame">
           🔄 Cập nhật frame
         </button>
       </div>
-      <p class="wm-preview-hint">▶ Phát video đến frame muốn xem, nhấn "Cập nhật frame"</p>
-
-      <!-- Video ẩn — dùng để capture frame, không hiển thị (đã có player ở VideoUploader) -->
-      <video
-        ref="hiddenVideoRef"
-        :src="store.previewUrl"
-        style="display:none"
-        preload="metadata"
-        crossorigin="anonymous"
-      ></video>
-
+      <p class="wm-preview-hint">▶ Tua video đến frame muốn xem rồi nhấn "Cập nhật frame"</p>
+      <!-- ✅ KHÔNG có <video> ẩn ở đây nữa — dùng trực tiếp videoRef từ VideoUploader -->
       <canvas ref="canvasRef" class="wm-canvas"></canvas>
     </div>
-
   </div>
 </template>
 
@@ -112,21 +89,21 @@
 import { ref, computed, watch, nextTick } from 'vue'
 
 const props = defineProps({
-  store: { type: Object, required: true },
+  store:    { type: Object, required: true },
+  // ✅ videoRef: HTMLVideoElement được expose từ VideoUploader qua defineExpose
+  // Chỉ truyền khi dùng ở video tab
+  videoRef: { type: Object, default: null },
 })
 const store = props.store
 
-// ── Phát hiện đây là video store hay image store ──────────────────────────
-// videoStore có selectedFile (singular), imageStore có selectedFiles (plural)
+// Phát hiện image hay video store
 const isVideo = computed(() => 'selectedFile' in store && !('selectedFiles' in store))
 
-const inputRef       = ref(null)
-const canvasRef      = ref(null)
-const hiddenVideoRef = ref(null)
-const isDragging     = ref(false)
-const currentIndex   = ref(0)
+const inputRef     = ref(null)
+const canvasRef    = ref(null)
+const isDragging   = ref(false)
+const currentIndex = ref(0)
 
-// ── Danh sách vị trí ─────────────────────────────────────────────────────
 const positionGrid = [
   { value: 'top-left',      label: 'Trên trái',  icon: '↖' },
   { value: 'top-center',    label: 'Trên giữa',  icon: '↑' },
@@ -148,14 +125,13 @@ const onFileChange = (e) => {
   if (file) store.setWatermark(file)
   e.target.value = ''
 }
-
 const onDrop = (e) => {
   isDragging.value = false
   const file = e.dataTransfer.files?.[0]
   if (file) store.setWatermark(file)
 }
 
-// ── Tính tọa độ vẽ logo ───────────────────────────────────────────────────
+// ── Canvas helpers ────────────────────────────────────────────────────────
 const calcWmPosition = (position, canvasW, canvasH, wmW, wmH, padding) => {
   const cx = Math.round((canvasW - wmW) / 2)
   const cy = Math.round((canvasH - wmH) / 2)
@@ -182,23 +158,18 @@ const loadImage = (src) => new Promise((resolve, reject) => {
   img.src = src
 })
 
-// ── Vẽ logo lên canvas với source là ImageBitmap hoặc HTMLImageElement ────
 const drawLogoOnCanvas = async (source, sourceW, sourceH) => {
   const canvas = canvasRef.value
-  if (!canvas) return
-
+  if (!canvas || !sourceW || !sourceH) return
   const wmUrl = store.watermarkUrl || '/assets/watermark.png'
-  const maxW  = 600
+  const maxW  = 700
   const scale = Math.min(1, maxW / sourceW)
   const dispW = Math.round(sourceW * scale)
   const dispH = Math.round(sourceH * scale)
-
   canvas.width  = dispW
   canvas.height = dispH
-
   const ctx = canvas.getContext('2d')
   ctx.drawImage(source, 0, 0, dispW, dispH)
-
   try {
     const wm      = await loadImage(wmUrl)
     const wmMaxW  = Math.round(dispW * 0.15)
@@ -226,43 +197,33 @@ const drawImagePreview = async () => {
   }
 }
 
-// ── VIDEO preview: capture frame tại currentTime ──────────────────────────
+// ── VIDEO preview: capture từ videoRef của VideoUploader ──────────────────
+// ✅ Dùng trực tiếp <video> đang hiển thị — browser luôn có frame sẵn
 const captureVideoFrame = async () => {
   await nextTick()
-  const video = hiddenVideoRef.value
-  if (!video || !video.src) return
-
-  // Nếu video chưa load metadata thì chờ
-  if (video.readyState < 1) {
-    await new Promise((resolve) => {
-      video.addEventListener('loadedmetadata', resolve, { once: true })
-    })
+  // props.videoRef là kết quả của defineExpose({ videoRef }) — là một Ref<HTMLVideoElement>
+  const video = props.videoRef?.videoRef?.value ?? props.videoRef?.value ?? props.videoRef
+  if (!video || !(video instanceof HTMLVideoElement)) {
+    console.warn('captureVideoFrame: không tìm thấy video element')
+    return
   }
-
-  // Sync currentTime với video player đang hiển thị ở VideoUploader
-  // (cùng src, browser cache frame) — không cần làm gì thêm, dùng currentTime mặc định = 0
-  // hoặc có thể seekTo giây 0 để luôn lấy frame đầu nếu chưa seek
-
+  if (!video.videoWidth || !video.videoHeight) {
+    console.warn('captureVideoFrame: video chưa có kích thước (chưa load)')
+    return
+  }
   await drawLogoOnCanvas(video, video.videoWidth, video.videoHeight)
 }
 
 // ── Watches ───────────────────────────────────────────────────────────────
-
-// Image tab: vẽ lại khi danh sách ảnh / watermark / position / index thay đổi
 watch(() => store.previewUrls?.length, (len) => { if (!isVideo.value && len > 0) drawImagePreview() })
+
 watch(() => store.watermarkUrl, () => {
-  if (isVideo.value) {
-    if (store.selectedFile) captureVideoFrame()
-  } else {
-    if (store.previewUrls?.[currentIndex.value]) drawImagePreview()
-  }
+  if (isVideo.value) { if (store.selectedFile) captureVideoFrame() }
+  else               { if (store.previewUrls?.[currentIndex.value]) drawImagePreview() }
 })
 watch(() => store.watermarkPosition, () => {
-  if (isVideo.value) {
-    if (store.selectedFile) captureVideoFrame()
-  } else {
-    if (store.previewUrls?.[currentIndex.value]) drawImagePreview()
-  }
+  if (isVideo.value) { if (store.selectedFile) captureVideoFrame() }
+  else               { if (store.previewUrls?.[currentIndex.value]) drawImagePreview() }
 })
 watch(currentIndex, () => {
   if (!isVideo.value && store.previewUrls?.[currentIndex.value]) drawImagePreview()
@@ -272,26 +233,22 @@ watch(() => store.selectedFiles?.length, (len) => {
     currentIndex.value = Math.max(0, len - 1)
 })
 
-// Video tab: vẽ preview ngay khi video được chọn (lấy frame đầu tiên)
+// Video: tự capture frame đầu khi video vừa được chọn
 watch(() => store.previewUrl, async (url) => {
   if (!isVideo.value || !url) return
+  // Chờ một chút để VideoUploader render xong video element
   await nextTick()
-  const video = hiddenVideoRef.value
-  if (!video) return
-  // Chờ video load xong metadata rồi capture frame đầu
-  const draw = async () => {
-    // seek tới 0.1s để tránh frame đen ở một số video
-    video.currentTime = 0.1
-    await new Promise((resolve) => {
-      video.addEventListener('seeked', resolve, { once: true })
-    })
-    await captureVideoFrame()
+  // Thử lại vài lần nếu video chưa load
+  let tries = 0
+  const tryCapture = async () => {
+    const video = props.videoRef?.videoRef?.value ?? props.videoRef?.value ?? props.videoRef
+    if (video instanceof HTMLVideoElement && video.videoWidth > 0) {
+      await captureVideoFrame()
+    } else if (tries++ < 10) {
+      setTimeout(tryCapture, 200)
+    }
   }
-  if (video.readyState >= 1) {
-    draw()
-  } else {
-    video.addEventListener('loadedmetadata', draw, { once: true })
-  }
+  tryCapture()
 })
 </script>
 
@@ -303,195 +260,84 @@ watch(() => store.previewUrl, async (url) => {
   padding: 16px;
   background: #fafafa;
 }
-.wm-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
-}
+.wm-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .wm-header h3 { margin: 0; font-size: 15px; color: #1e293b; }
-
-.wm-badge {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 99px;
-}
+.wm-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
 .wm-badge--default { background: #f1f5f9; color: #64748b; }
 .wm-badge--custom  { background: #dbeafe; color: #2563eb; }
 
-.wm-controls-row {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-}
-
-.wm-body {
-  flex: 2;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
+.wm-controls-row { display: flex; gap: 12px; align-items: flex-start; }
+.wm-body { flex: 2; min-width: 0; display: flex; flex-direction: column; }
 
 .wm-drop {
-  border: 2px dashed #cbd5e1;
-  border-radius: 8px;
-  padding: 16px 12px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.2s;
-  background: white;
-  min-height: 120px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  flex: 1;
+  border: 2px dashed #cbd5e1; border-radius: 8px; padding: 16px 12px;
+  text-align: center; cursor: pointer; transition: all 0.2s; background: white;
+  min-height: 120px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; flex: 1;
 }
 .wm-drop:hover, .wm-drop--drag { border-color: #3b82f6; background: #eff6ff; }
 .wm-drop--has { border-style: solid; border-color: #3b82f6; }
-
 .wm-drop__icon { font-size: 24px; margin-bottom: 4px; }
 .wm-drop__text { font-size: 12px; color: #475569; margin: 0 0 3px; }
 .wm-drop__link { color: #3b82f6; font-weight: 600; }
 .wm-drop__hint { font-size: 11px; color: #94a3b8; margin: 0; }
-.wm-drop__preview {
-  max-height: 52px;
-  max-width: 100px;
-  object-fit: contain;
-  margin-bottom: 4px;
-}
+.wm-drop__preview { max-height: 52px; max-width: 100px; object-fit: contain; margin-bottom: 4px; }
 .wm-drop__name { font-size: 11px; color: #64748b; margin: 0; }
 
 .wm-clear {
-  margin-top: 6px;
-  width: 100%;
-  background: transparent;
-  border: 1px solid #fca5a5;
-  color: #ef4444;
-  border-radius: 6px;
-  padding: 5px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: background 0.2s;
+  margin-top: 6px; width: 100%; background: transparent;
+  border: 1px solid #fca5a5; color: #ef4444; border-radius: 6px;
+  padding: 5px; font-size: 12px; cursor: pointer; transition: background 0.2s;
 }
 .wm-clear:hover { background: #fef2f2; }
 
 .wm-position-section {
-  flex: 1;
-  min-width: 0;
-  padding: 12px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  flex: 1; min-width: 0; padding: 12px; background: #f8fafc;
+  border: 1px solid #e2e8f0; border-radius: 8px;
+  display: flex; flex-direction: column; align-items: center;
 }
-.wm-position-label {
-  font-size: 12px;
-  color: #475569;
-  margin: 0 0 8px;
-  align-self: flex-start;
-}
+.wm-position-label { font-size: 12px; color: #475569; margin: 0 0 8px; align-self: flex-start; }
 .wm-position-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 28px);
-  grid-template-rows: repeat(3, 28px);
-  gap: 3px;
-  width: fit-content;
+  display: grid; grid-template-columns: repeat(3, 28px);
+  grid-template-rows: repeat(3, 28px); gap: 3px; width: fit-content;
 }
 .wm-pos-btn {
-  width: 28px; height: 28px;
-  border: 1px solid #cbd5e1;
-  border-radius: 5px;
-  background: white;
-  cursor: pointer;
-  font-size: 13px;
+  width: 28px; height: 28px; border: 1px solid #cbd5e1; border-radius: 5px;
+  background: white; cursor: pointer; font-size: 13px;
   display: flex; align-items: center; justify-content: center;
-  transition: all 0.15s;
-  padding: 0;
-  color: #64748b;
+  transition: all 0.15s; padding: 0; color: #64748b;
 }
 .wm-pos-btn:hover { background: #eff6ff; border-color: #3b82f6; color: #3b82f6; }
-.wm-pos-btn--active {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: white;
-}
-.wm-position-name {
-  margin: 6px 0 0;
-  font-size: 11px;
-  color: #3b82f6;
-  font-weight: 600;
-  text-align: center;
-}
+.wm-pos-btn--active { background: #3b82f6; border-color: #3b82f6; color: white; }
+.wm-position-name { margin: 6px 0 0; font-size: 11px; color: #3b82f6; font-weight: 600; text-align: center; }
 
-/* ── Preview section ── */
+/* Preview */
 .wm-preview-section { margin-top: 16px; }
-.wm-preview-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 4px;
-}
+.wm-preview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
 .wm-preview-title { font-size: 12px; color: #64748b; margin: 0; }
-
-/* Nút cập nhật frame (chỉ dùng ở video tab) */
 .wm-refresh-btn {
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-size: 12px;
-  color: #475569;
-  cursor: pointer;
-  transition: all 0.15s;
+  background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px;
+  padding: 4px 10px; font-size: 12px; color: #475569; cursor: pointer; transition: all 0.15s;
 }
 .wm-refresh-btn:hover { background: #3b82f6; color: white; border-color: #3b82f6; }
-
-.wm-preview-hint {
-  font-size: 11px;
-  color: #94a3b8;
-  margin: 0 0 8px;
-}
+.wm-preview-hint { font-size: 11px; color: #94a3b8; margin: 0 0 8px; }
 
 .wm-preview-nav { display: flex; align-items: center; gap: 6px; }
 .wm-nav-btn {
-  background: #e2e8f0;
-  border: none;
-  border-radius: 50%;
-  width: 26px; height: 26px;
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
+  background: #e2e8f0; border: none; border-radius: 50%; width: 26px; height: 26px;
+  font-size: 16px; line-height: 1; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  color: #475569;
-  padding: 0;
-  transition: background 0.15s;
+  color: #475569; padding: 0; transition: background 0.15s;
 }
 .wm-nav-btn:hover:not(:disabled) { background: #3b82f6; color: white; }
 .wm-nav-btn:disabled { opacity: 0.3; cursor: default; }
-.wm-nav-counter {
-  font-size: 12px;
-  color: #64748b;
-  font-weight: 600;
-  min-width: 36px;
-  text-align: center;
-}
+.wm-nav-counter { font-size: 12px; color: #64748b; font-weight: 600; min-width: 36px; text-align: center; }
 .wm-preview-filename {
-  font-size: 11px;
-  color: #94a3b8;
-  margin: 0 0 8px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 11px; color: #94a3b8; margin: 0 0 8px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .wm-canvas {
-  max-width: 100%;
-  border-radius: 6px;
-  margin: 0 auto;
-  border: 1px solid #e2e8f0;
-  display: block;
+  max-width: 100%; border-radius: 6px; margin: 0 auto;
+  border: 1px solid #e2e8f0; display: block;
 }
 </style>
