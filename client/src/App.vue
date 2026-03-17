@@ -1,14 +1,14 @@
 <template>
   <div class="app">
     <header class="app-header">
-      <h1>🖼 Watermark & Compress</h1>
-      <p>Giảm resolution ảnh và bitrate video, chèn watermark tự động</p>
+      <h1>Watermark & Compress</h1>
+      <p>Giảm resolution, chèn watermark tự động</p>
     </header>
 
     <main class="app-main">
       <div class="tab-bar">
-        <button class="tab-btn" :class="{ 'tab-btn--active': activeTab === 'image' }" @click="activeTab = 'image'">🖼 Ảnh</button>
-        <button class="tab-btn" :class="{ 'tab-btn--active': activeTab === 'video' }" @click="activeTab = 'video'">🎬 Video</button>
+        <button class="tab-btn" :class="{ 'tab-btn--active': activeTab === 'image' }" @click="activeTab = 'image'">Ảnh</button>
+        <button class="tab-btn" :class="{ 'tab-btn--active': activeTab === 'video' }" @click="activeTab = 'video'">Video</button>
       </div>
 
       <!-- Image tab -->
@@ -35,13 +35,9 @@
             @click="videoStore.processAndDownload"
           >
             <span v-if="videoStore.isProcessing">⏳ Đang xử lý video...</span>
-            <span v-else>⬇️ Xử lý & Tải xuống video</span>
+            <span v-else>⬇️ Tải xuống video</span>
           </button>
         </template>
-      </div>
-
-      <div class="card">
-        <HistoryTable />
       </div>
     </main>
   </div>

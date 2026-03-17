@@ -478,7 +478,7 @@ onUnmounted(() => stopRaf())
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .wm-canvas {
-  max-width: 100%; border-radius: 6px; margin: 0 auto;
+  max-width: 50%; border-radius: 6px; margin: 0 auto;
   border: 1px solid #e2e8f0; display: block;
 }
 
