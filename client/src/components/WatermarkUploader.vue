@@ -9,10 +9,10 @@
       </span>
     </div>
 
-    <!-- Logo upload + vị trí -->
+    <!-- Logo upload + chọn vị trí -->
     <div class="wm-controls-row">
 
-      <!-- Drop zone logo -->
+      <!-- Drop zone để upload logo -->
       <div class="wm-body">
         <div
           class="wm-drop"
@@ -22,7 +22,13 @@
           @drop.prevent="onDrop"
           @click="fileInput?.click()"
         >
-          <input ref="fileInput" type="file" accept="image/jpeg,image/png,image/webp" style="display:none" @change="onFileChange" />
+          <input
+            ref="fileInput"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            style="display: none"
+            @change="onFileChange"
+          />
 
           <template v-if="!store.watermarkFile">
             <div class="wm-drop__icon">🏷️</div>
@@ -40,7 +46,7 @@
         </button>
       </div>
 
-      <!-- Grid chọn vị trí -->
+      <!-- Grid 3x3 chọn vị trí logo -->
       <div class="wm-position-section">
         <p class="wm-position-label">📍 Vị trí:</p>
         <div class="wm-position-grid">
@@ -51,13 +57,15 @@
             :class="{ 'wm-pos-btn--active': store.watermarkPosition === pos.value }"
             :title="pos.label"
             @click="store.watermarkPosition = pos.value"
-          >{{ pos.icon }}</button>
+          >
+            {{ pos.icon }}
+          </button>
         </div>
         <p class="wm-position-name">{{ currentPositionLabel }}</p>
       </div>
     </div>
 
-    <!-- Preview ảnh -->
+    <!-- Preview ảnh (chỉ hiện khi dùng image store) -->
     <div v-if="!isVideo && store.previewUrls?.length > 0" class="wm-preview-section">
       <div class="wm-preview-header">
         <p class="wm-preview-title">👁 Preview ảnh với Logo:</p>
@@ -71,35 +79,57 @@
       <canvas ref="canvasRef" class="wm-canvas"></canvas>
     </div>
 
-    <!-- Preview video -->
+    <!-- Preview video (chỉ hiện khi dùng video store) -->
     <div v-if="isVideo && store.selectedFile" class="wm-preview-section">
       <p class="wm-preview-title">👁 Preview video với Logo:</p>
 
-      <!-- Video ẩn để decode frame (visibility:hidden — browser mới decode được, display:none thì không) -->
+      <!--
+        Video element ẩn để browser decode frame liên tục.
+        Dùng visibility:hidden thay vì display:none vì display:none
+        khiến browser không decode video → canvas trống.
+      -->
       <video
         ref="videoEl"
         :src="store.previewUrl"
         preload="auto"
-        style="position:absolute; visibility:hidden; width:1px; height:1px;"
-        @canplay="onVideoReady"
         crossorigin="anonymous"
+        style="position: absolute; visibility: hidden; width: 1px; height: 1px;"
+        @canplay="onVideoReady"
       ></video>
 
-      <!-- Canvas hiển thị frame + logo, có thanh controls bên dưới -->
+      <!-- Canvas vẽ frame + logo, controls nằm bên dưới -->
       <div class="vc-wrap">
         <canvas ref="canvasRef" class="vc-canvas"></canvas>
 
         <div v-if="videoReady" class="vc-controls">
-          <button class="vc-btn" @click="togglePlay">{{ isPlaying ? '⏸' : '▶' }}</button>
+          <button class="vc-btn" @click="togglePlay">
+            {{ isPlaying ? '⏸' : '▶' }}
+          </button>
 
-          <input class="vc-seek" type="range" min="0" :max="duration" step="0.01"
-            :value="currentTime" @input="onSeek" />
+          <input
+            class="vc-seek"
+            type="range"
+            min="0"
+            :max="duration"
+            step="0.01"
+            :value="currentTime"
+            @input="onSeek"
+          />
 
           <span class="vc-time">{{ fmt(currentTime) }} / {{ fmt(duration) }}</span>
 
-          <button class="vc-btn" @click="toggleMute">{{ isMuted ? '🔇' : '🔊' }}</button>
-          <input class="vc-volume" type="range" min="0" max="1" step="0.01"
-            :value="isMuted ? 0 : volume" @input="onVolume" />
+          <button class="vc-btn" @click="toggleMute">
+            {{ isMuted ? '🔇' : '🔊' }}
+          </button>
+          <input
+            class="vc-volume"
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            :value="isMuted ? 0 : volume"
+            @input="onVolume"
+          />
         </div>
       </div>
     </div>
@@ -116,30 +146,33 @@ const props = defineProps({
 })
 const store = props.store
 
-// Phân biệt image store hay video store
-const isVideo = computed(() => 'selectedFile' in store && !('selectedFiles' in store))
+// Phân biệt đây là video store hay image store
+// Video store có "selectedFile" (một file), image store có "selectedFiles" (nhiều file)
+const isVideo = computed(() => {
+  return 'selectedFile' in store && !('selectedFiles' in store)
+})
 
-// ─── State ────────────────────────────────────────────────────────────────────
-const fileInput  = ref(null)
-const canvasRef  = ref(null)
-const videoEl    = ref(null)
-const isDragging = ref(false)
-const imgIndex   = ref(0)
+// ─── Reactive state ───────────────────────────────────────────────────────────
+const fileInput  = ref(null)  // ref tới <input type="file"> ẩn
+const canvasRef  = ref(null)  // ref tới <canvas> hiển thị preview
+const videoEl    = ref(null)  // ref tới <video> ẩn dùng để decode frame
+const isDragging = ref(false) // trạng thái kéo file vào drop zone
+const imgIndex   = ref(0)     // index ảnh đang xem trong danh sách
 
-// Video player state
-const videoReady  = ref(false)
-const isPlaying   = ref(false)
-const isMuted     = ref(false)
-const volume      = ref(1)
-const currentTime = ref(0)
-const duration    = ref(0)
+// Trạng thái video player
+const videoReady  = ref(false) // video đã load xong metadata chưa
+const isPlaying   = ref(false) // đang phát hay đang dừng
+const isMuted     = ref(false) // đang tắt tiếng hay không
+const volume      = ref(1)     // âm lượng (0.0 - 1.0)
+const currentTime = ref(0)     // vị trí hiện tại (giây)
+const duration    = ref(0)     // tổng thời lượng (giây)
 
-// RAF loop & watermark image cache
-let rafId = null
-let wmImg = null  // HTMLImageElement đã load
-let wmSrc = ''    // src đã load để tránh reload lại
+// Cache watermark image để RAF loop không phải load lại mỗi frame
+let rafId         = null  // ID của requestAnimationFrame hiện tại
+let cachedWmImage = null  // HTMLImageElement đã load sẵn
+let cachedWmSrc   = ''    // URL đã load để so sánh tránh load lại
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Hằng số ──────────────���───────────────────────────────────────────────────
 const POSITIONS = [
   { value: 'top-left',      label: 'Trên trái',   icon: '↖' },
   { value: 'top-center',    label: 'Trên giữa',   icon: '↑' },
@@ -152,219 +185,300 @@ const POSITIONS = [
   { value: 'bottom-right',  label: 'Dưới phải',   icon: '↘' },
 ]
 
-const currentPositionLabel = computed(
-  () => POSITIONS.find(p => p.value === store.watermarkPosition)?.label ?? ''
-)
+// Label của vị trí đang chọn để hiển thị bên dưới grid
+const currentPositionLabel = computed(() => {
+  const found = POSITIONS.find(p => p.value === store.watermarkPosition)
+  return found ? found.label : ''
+})
 
-// ─── Logo upload ──────────────────────────────────────────────────────────────
-const onFileChange = (e) => {
-  const file = e.target.files?.[0]
+// ─── Xử lý upload logo ────────────────────────────────────────────────────────
+function onFileChange(event) {
+  const file = event.target.files?.[0]
   if (file) store.setWatermark(file)
-  e.target.value = ''
+  event.target.value = '' // reset để có thể chọn lại cùng file
 }
 
-const onDrop = (e) => {
+function onDrop(event) {
   isDragging.value = false
-  const file = e.dataTransfer.files?.[0]
+  const file = event.dataTransfer.files?.[0]
   if (file) store.setWatermark(file)
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-// Format giây → "1:23"
-const fmt = (s) => {
-  if (!s || isNaN(s)) return '0:00'
-  return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
-}
+// ─── Hàm tiện ích ─────────────────────────────────────────────────────────────
 
-// Tính toạ độ vẽ logo dựa vào vị trí đã chọn
-const getLogoPosition = (pos, cW, cH, wmW, wmH, pad) => {
-  const cx = Math.round((cW - wmW) / 2)
-  const cy = Math.round((cH - wmH) / 2)
-  const map = {
-    'top-left':      [pad,            pad],
-    'top-center':    [cx,             pad],
-    'top-right':     [cW - wmW - pad, pad],
-    'center-left':   [pad,            cy],
-    'center-right':  [cW - wmW - pad, cy],
-    'center':        [cx,             cy],
-    'bottom-left':   [pad,            cH - wmH - pad],
-    'bottom-center': [cx,             cH - wmH - pad],
-    'bottom-right':  [cW - wmW - pad, cH - wmH - pad],
+// Chuyển giây sang chuỗi "m:ss" (ví dụ 75 → "1:15")
+function formatTime(seconds) {
+  if (!seconds || isNaN(seconds)) return '0:00'
+  const minutes = Math.floor(seconds / 60)
+  const secs    = String(Math.floor(seconds % 60)).padStart(2, '0')
+  return `${minutes}:${secs}`
+}
+// Dùng tên ngắn fmt trong template cho gọn
+const fmt = formatTime
+
+// Tính toạ độ (x, y) để vẽ logo tại vị trí đã chọn
+function getLogoXY(position, canvasW, canvasH, logoW, logoH, padding) {
+  const centerX = Math.round((canvasW - logoW) / 2)
+  const centerY = Math.round((canvasH - logoH) / 2)
+
+  const positionMap = {
+    'top-left':      { x: padding,               y: padding },
+    'top-center':    { x: centerX,               y: padding },
+    'top-right':     { x: canvasW - logoW - padding, y: padding },
+    'center-left':   { x: padding,               y: centerY },
+    'center':        { x: centerX,               y: centerY },
+    'center-right':  { x: canvasW - logoW - padding, y: centerY },
+    'bottom-left':   { x: padding,               y: canvasH - logoH - padding },
+    'bottom-center': { x: centerX,               y: canvasH - logoH - padding },
+    'bottom-right':  { x: canvasW - logoW - padding, y: canvasH - logoH - padding },
   }
-  const [x, y] = map[pos] || map['bottom-left']
-  return { x: Math.max(0, x), y: Math.max(0, y) }
+
+  const result = positionMap[position] || positionMap['bottom-left']
+  return {
+    x: Math.max(0, result.x),
+    y: Math.max(0, result.y),
+  }
 }
 
 // Load watermark image, dùng cache để không load lại mỗi frame.
-// Chỉ load khi user đã upload logo — KHÔNG fallback về /assets/ vì file đó
-// nằm trên server, không phải client/public, sẽ 404 trên Vite dev server.
-const getWmImg = () => new Promise((resolve) => {
-  const src = store.watermarkUrl   // rỗng nếu chưa upload
-  if (!src) return resolve(null)   // chưa có logo → không vẽ gì ở preview
-  if (wmSrc === src && wmImg) return resolve(wmImg)  // đã cache
-  const img = new Image()
-  img.crossOrigin = 'anonymous'
-  img.onload  = () => { wmImg = img; wmSrc = src; resolve(img) }
-  img.onerror = () => { wmImg = null; wmSrc = ''; resolve(null) }
-  img.src = src
-})
+// Fallback về /watermark.png (đặt trong client/public/) nếu user chưa upload logo.
+function loadWatermarkImage() {
+  return new Promise((resolve) => {
+    // Dùng logo user upload nếu có, ngược lại dùng logo mặc định từ public/
+    const src = store.watermarkUrl || '/watermark.png'
 
-// Vẽ ảnh + logo lên canvas (dùng cho image preview)
-const drawToCanvas = async (source, sourceW, sourceH) => {
+    // Nếu đã cache src này rồi thì trả về luôn, không load lại
+    if (cachedWmSrc === src && cachedWmImage) {
+      return resolve(cachedWmImage)
+    }
+
+    const img     = new Image()
+    img.crossOrigin = 'anonymous'
+
+    img.onload = () => {
+      cachedWmImage = img
+      cachedWmSrc   = src
+      resolve(img)
+    }
+
+    img.onerror = () => {
+      cachedWmImage = null
+      cachedWmSrc   = ''
+      resolve(null) // load thất bại → không vẽ logo, không crash
+    }
+
+    img.src = src
+  })
+}
+
+// Vẽ một source (ảnh hoặc frame video) + logo lên canvas
+async function drawToCanvas(source, sourceWidth, sourceHeight) {
   const canvas = canvasRef.value
-  if (!canvas || !sourceW || !sourceH) return
+  if (!canvas || !sourceWidth || !sourceHeight) return
 
-  const MAX_WIDTH = 700
-  const scale = Math.min(1, MAX_WIDTH / sourceW)
-  const dispW = Math.round(sourceW * scale)
-  const dispH = Math.round(sourceH * scale)
+  // Thu nhỏ để hiển thị vừa khung, không upscale
+  const MAX_DISPLAY_WIDTH = 700
+  const scaleFactor = Math.min(1, MAX_DISPLAY_WIDTH / sourceWidth)
+  const displayW    = Math.round(sourceWidth  * scaleFactor)
+  const displayH    = Math.round(sourceHeight * scaleFactor)
 
-  if (canvas.width  !== dispW) canvas.width  = dispW
-  if (canvas.height !== dispH) canvas.height = dispH
+  // Chỉ resize canvas khi thực sự cần (tránh flicker)
+  if (canvas.width  !== displayW) canvas.width  = displayW
+  if (canvas.height !== displayH) canvas.height = displayH
 
   const ctx = canvas.getContext('2d')
-  ctx.drawImage(source, 0, 0, dispW, dispH)
+  ctx.drawImage(source, 0, 0, displayW, displayH)
 
-  const wm = await getWmImg()
-  if (!wm) return
+  // Vẽ logo
+  const logoImage = await loadWatermarkImage()
+  if (!logoImage) return
 
-  const wmW = Math.round(dispW * 0.20)
-  const wmH = Math.round(wmW / wm.naturalWidth * wm.naturalHeight)
-  const pad = Math.max(8, Math.round(15 * scale))
-  const { x, y } = getLogoPosition(store.watermarkPosition, dispW, dispH, wmW, wmH, pad)
-  ctx.drawImage(wm, x, y, wmW, wmH)
+  // Logo = 20% chiều rộng canvas, chiều cao giữ tỉ lệ gốc
+  const logoW   = Math.round(displayW * 0.20)
+  const logoH   = Math.round(logoW * logoImage.naturalHeight / logoImage.naturalWidth)
+  const padding = Math.max(8, Math.round(15 * scaleFactor))
+
+  const { x, y } = getLogoXY(store.watermarkPosition, displayW, displayH, logoW, logoH, padding)
+  ctx.drawImage(logoImage, x, y, logoW, logoH)
 }
 
-// ─── Image preview ──────────────────────���─────────────────────────────────────
-const drawImagePreview = async () => {
+// ─── Image preview ────────────────────────────────────────────────────────────
+async function drawImagePreview() {
   await nextTick()
+
   const url = store.previewUrls?.[imgIndex.value]
   if (!url) return
-  const img = new Image()
+
+  const img       = new Image()
   img.crossOrigin = 'anonymous'
-  img.onload = () => drawToCanvas(img, img.naturalWidth, img.naturalHeight)
-  img.src = url
+  img.onload      = () => drawToCanvas(img, img.naturalWidth, img.naturalHeight)
+  img.src         = url
 }
 
-// ─── Video preview (RAF loop) ─────────────────────────────────────────────────
-const stopLoop = () => {
-  if (rafId) { cancelAnimationFrame(rafId); rafId = null }
+// ─── Video preview — RAF loop ─────────────────────────────────────────────────
+function stopRafLoop() {
+  if (rafId !== null) {
+    cancelAnimationFrame(rafId)
+    rafId = null
+  }
 }
 
-// Loop chạy sync (không async) để không bỏ lỡ frame
-const startLoop = () => {
-  stopLoop()
-  // Preload watermark trước để wmImg có sẵn trong cache khi loop bắt đầu
-  getWmImg().then(() => {
-    const tick = () => {
+function startRafLoop() {
+  stopRafLoop()
+
+  // Preload watermark vào cache trước, sau đó mới bắt đầu loop
+  loadWatermarkImage().then(() => {
+    function tick() {
       const video  = videoEl.value
       const canvas = canvasRef.value
-      if (video && canvas && video.videoWidth) {
-        const MAX_WIDTH = 700
-        const scale = Math.min(1, MAX_WIDTH / video.videoWidth)
-        const dispW = Math.round(video.videoWidth  * scale)
-        const dispH = Math.round(video.videoHeight * scale)
 
-        if (canvas.width  !== dispW) canvas.width  = dispW
-        if (canvas.height !== dispH) canvas.height = dispH
+      if (video && canvas && video.videoWidth > 0) {
+        const MAX_DISPLAY_WIDTH = 700
+        const scaleFactor = Math.min(1, MAX_DISPLAY_WIDTH / video.videoWidth)
+        const displayW    = Math.round(video.videoWidth  * scaleFactor)
+        const displayH    = Math.round(video.videoHeight * scaleFactor)
+
+        if (canvas.width  !== displayW) canvas.width  = displayW
+        if (canvas.height !== displayH) canvas.height = displayH
 
         const ctx = canvas.getContext('2d')
-        ctx.drawImage(video, 0, 0, dispW, dispH)
+        ctx.drawImage(video, 0, 0, displayW, displayH)
 
-        // Vẽ logo từ cache (sync, không await — đảm bảo 60fps)
-        if (wmImg) {
-          const wmW = Math.round(dispW * 0.20)
-          const wmH = Math.round(wmW / wmImg.naturalWidth * wmImg.naturalHeight)
-          const pad = Math.max(8, Math.round(15 * scale))
-          const { x, y } = getLogoPosition(store.watermarkPosition, dispW, dispH, wmW, wmH, pad)
-          ctx.drawImage(wmImg, x, y, wmW, wmH)
+        // Vẽ logo từ cache (sync, không await) để đạt 60fps
+        if (cachedWmImage) {
+          const logoW   = Math.round(displayW * 0.20)
+          const logoH   = Math.round(logoW * cachedWmImage.naturalHeight / cachedWmImage.naturalWidth)
+          const padding = Math.max(8, Math.round(15 * scaleFactor))
+          const { x, y } = getLogoXY(store.watermarkPosition, displayW, displayH, logoW, logoH, padding)
+          ctx.drawImage(cachedWmImage, x, y, logoW, logoH)
         }
       }
+
       rafId = requestAnimationFrame(tick)
     }
+
     rafId = requestAnimationFrame(tick)
   })
 }
 
-// ─── Video events ─────────────────────────────────────────────────────────────
-const bindVideoEvents = () => {
-  const v = videoEl.value
-  if (!v) return
-  v.addEventListener('timeupdate',     () => { currentTime.value = v.currentTime })
-  v.addEventListener('durationchange', () => { duration.value    = v.duration })
-  v.addEventListener('play',           () => { isPlaying.value   = true  })
-  v.addEventListener('pause',          () => { isPlaying.value   = false })
-  v.addEventListener('ended',          () => { isPlaying.value   = false })
-  v.addEventListener('volumechange',   () => { volume.value = v.volume; isMuted.value = v.muted })
+// ─── Gắn event listeners cho video element ────────────────────────────────────
+function bindVideoEvents() {
+  const video = videoEl.value
+  if (!video) return
+
+  video.addEventListener('timeupdate',     () => { currentTime.value = video.currentTime })
+  video.addEventListener('durationchange', () => { duration.value    = video.duration })
+  video.addEventListener('play',           () => { isPlaying.value   = true })
+  video.addEventListener('pause',          () => { isPlaying.value   = false })
+  video.addEventListener('ended',          () => { isPlaying.value   = false })
+  video.addEventListener('volumechange',   () => {
+    volume.value = video.volume
+    isMuted.value = video.muted
+  })
 }
 
-const onVideoReady = () => {
-  const v = videoEl.value
-  if (!v) return
+// Gọi khi video element phát sự kiện "canplay" (đã có thể phát)
+function onVideoReady() {
+  const video = videoEl.value
+  if (!video) return
+
   videoReady.value = true
-  duration.value   = v.duration || 0
-  volume.value     = v.volume
-  isMuted.value    = v.muted
-  startLoop()
+  duration.value   = video.duration || 0
+  volume.value     = video.volume
+  isMuted.value    = video.muted
+
+  startRafLoop()
 }
 
-// ─── Video controls ───────────────────────────────────────────────────────────
-const togglePlay = () => { const v = videoEl.value; if (!v) return; v.paused ? v.play() : v.pause() }
-const toggleMute = () => { const v = videoEl.value; if (!v) return; v.muted = !v.muted }
-const onSeek     = (e) => { const v = videoEl.value; if (!v) return; v.currentTime = +e.target.value }
-const onVolume   = (e) => {
-  const v = videoEl.value
-  if (!v) return
-  v.volume = +e.target.value
-  v.muted  = v.volume === 0
+// ─── Video controls ────────────────��──────────────────────────────────────────
+function togglePlay() {
+  const video = videoEl.value
+  if (!video) return
+  if (video.paused) {
+    video.play()
+  } else {
+    video.pause()
+  }
+}
+
+function toggleMute() {
+  const video = videoEl.value
+  if (!video) return
+  video.muted = !video.muted
+}
+
+function onSeek(event) {
+  const video = videoEl.value
+  if (!video) return
+  video.currentTime = Number(event.target.value)
+}
+
+function onVolume(event) {
+  const video = videoEl.value
+  if (!video) return
+  video.volume = Number(event.target.value)
+  video.muted  = video.volume === 0
 }
 
 // ─── Watchers ─────────────────────────────────────────────────────────────────
-// Ảnh: vẽ lại khi danh sách ảnh thay đổi
-watch(() => store.previewUrls?.length, (len) => {
-  if (!isVideo.value && len > 0) drawImagePreview()
+
+// Ảnh: vẽ lại khi user thêm ảnh mới
+watch(() => store.previewUrls?.length, (newLength) => {
+  if (!isVideo.value && newLength > 0) drawImagePreview()
 })
 
-// Cả hai: vẽ lại khi đổi logo hoặc đổi vị trí
+// Cả hai: khi user đổi logo → xoá cache và load lại
 watch(() => store.watermarkUrl, () => {
-  wmImg = null; wmSrc = ''   // xoá cache để load logo mới
-  if (!isVideo.value) drawImagePreview()
-  else getWmImg()            // video: preload logo mới vào cache ngay
-})
-watch(() => store.watermarkPosition, () => {
-  if (!isVideo.value) drawImagePreview()
-  // video: loop tự re-draw frame tiếp theo với vị trí mới
+  cachedWmImage = null
+  cachedWmSrc   = ''
+  if (!isVideo.value) {
+    drawImagePreview()
+  } else {
+    // Video: preload logo mới vào cache ngay để RAF loop có sẵn dùng
+    loadWatermarkImage()
+  }
 })
 
-// Ảnh: vẽ lại khi chuyển trang
+// Cả hai: khi user đổi vị trí logo
+watch(() => store.watermarkPosition, () => {
+  if (!isVideo.value) {
+    drawImagePreview()
+  }
+  // Video: RAF loop tự vẽ lại frame tiếp theo với vị trí mới → không cần làm gì thêm
+})
+
+// Ảnh: vẽ lại khi user chuyển trang ảnh
 watch(imgIndex, () => {
   if (!isVideo.value) drawImagePreview()
 })
 
-// Ảnh: giữ imgIndex trong giới hạn khi bớt ảnh
-watch(() => store.selectedFiles?.length, (len) => {
-  if (len !== undefined && imgIndex.value >= len)
-    imgIndex.value = Math.max(0, len - 1)
+// Ảnh: giữ imgIndex trong giới hạn khi user xoá bớt ảnh
+watch(() => store.selectedFiles?.length, (newLength) => {
+  if (newLength !== undefined && imgIndex.value >= newLength) {
+    imgIndex.value = Math.max(0, newLength - 1)
+  }
 })
 
-// Video: reset khi chọn video mới
+// Video: reset state khi user chọn video mới
 watch(() => store.previewUrl, async () => {
   if (!isVideo.value) return
-  stopLoop()
+
+  stopRafLoop()
   videoReady.value  = false
   isPlaying.value   = false
   currentTime.value = 0
   duration.value    = 0
-  await nextTick()
+
+  await nextTick() // đợi Vue cập nhật DOM (src của video element thay đổi)
   bindVideoEvents()
-  // @canplay sẽ tự gọi onVideoReady khi video sẵn sàng
+  // Sau đó video sẽ tự phát sự kiện "canplay" → gọi onVideoReady → startRafLoop
 })
 
-onUnmounted(() => stopLoop())
+onUnmounted(() => stopRafLoop())
 </script>
 
 <style scoped>
-/* ── Layout section ── */
+/* ── Section wrapper ── */
 .wm-section {
   margin-top: 24px;
   border: 1px solid #e2e8f0;
@@ -372,97 +486,238 @@ onUnmounted(() => stopLoop())
   padding: 16px;
   background: #fafafa;
 }
-.wm-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-.wm-header h3 { margin: 0; font-size: 15px; color: #1e293b; }
-.wm-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
+
+/* ── Header ── */
+.wm-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.wm-header h3 {
+  margin: 0;
+  font-size: 15px;
+  color: #1e293b;
+}
+.wm-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 99px;
+}
 .wm-badge--default { background: #f1f5f9; color: #64748b; }
 .wm-badge--custom  { background: #dbeafe; color: #2563eb; }
 
-/* ── Controls row ── */
-.wm-controls-row { display: flex; gap: 12px; align-items: flex-start; }
-.wm-body { flex: 2; min-width: 0; display: flex; flex-direction: column; }
-
-/* ── Drop zone ── */
-.wm-drop {
-  border: 2px dashed #cbd5e1; border-radius: 8px; padding: 16px 12px;
-  text-align: center; cursor: pointer; transition: all 0.2s; background: white;
-  min-height: 120px; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; flex: 1;
+/* ── Controls row (drop zone + vị trí) ── */
+.wm-controls-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
 }
-.wm-drop:hover,
-.wm-drop--drag  { border-color: #3b82f6; background: #eff6ff; }
-.wm-drop--has   { border-style: solid; border-color: #3b82f6; }
-.wm-drop__icon    { font-size: 24px; margin-bottom: 4px; }
-.wm-drop__text    { font-size: 12px; color: #475569; margin: 0 0 3px; }
-.wm-drop__link    { color: #3b82f6; font-weight: 600; }
-.wm-drop__hint    { font-size: 11px; color: #94a3b8; margin: 0; }
-.wm-drop__preview { max-height: 52px; max-width: 100px; object-fit: contain; margin-bottom: 4px; }
-.wm-drop__name    { font-size: 11px; color: #64748b; margin: 0; }
+.wm-body {
+  flex: 2;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
 
+/* ── Drop zone upload logo ── */
+.wm-drop {
+  border: 2px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: 16px 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: white;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+}
+.wm-drop:hover      { border-color: #3b82f6; background: #eff6ff; }
+.wm-drop--drag      { border-color: #3b82f6; background: #eff6ff; }
+.wm-drop--has       { border-style: solid; border-color: #3b82f6; }
+.wm-drop__icon      { font-size: 24px; margin-bottom: 4px; }
+.wm-drop__text      { font-size: 12px; color: #475569; margin: 0 0 3px; }
+.wm-drop__link      { color: #3b82f6; font-weight: 600; }
+.wm-drop__hint      { font-size: 11px; color: #94a3b8; margin: 0; }
+.wm-drop__preview   { max-height: 52px; max-width: 100px; object-fit: contain; margin-bottom: 4px; }
+.wm-drop__name      { font-size: 11px; color: #64748b; margin: 0; }
+
+/* Nút "Dùng logo mặc định" */
 .wm-clear {
-  margin-top: 6px; width: 100%; background: transparent;
-  border: 1px solid #fca5a5; color: #ef4444; border-radius: 6px;
-  padding: 5px; font-size: 12px; cursor: pointer; transition: background 0.2s;
+  margin-top: 6px;
+  width: 100%;
+  background: transparent;
+  border: 1px solid #fca5a5;
+  color: #ef4444;
+  border-radius: 6px;
+  padding: 5px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
 }
 .wm-clear:hover { background: #fef2f2; }
 
-/* ── Position grid ── */
+/* ── Grid chọn vị trí 3x3 ── */
 .wm-position-section {
-  flex: 1; min-width: 0; padding: 12px; background: #f8fafc;
-  border: 1px solid #e2e8f0; border-radius: 8px;
-  display: flex; flex-direction: column; align-items: center;
+  flex: 1;
+  min-width: 0;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
-.wm-position-label { font-size: 12px; color: #475569; margin: 0 0 8px; align-self: flex-start; }
+.wm-position-label {
+  font-size: 12px;
+  color: #475569;
+  margin: 0 0 8px;
+  align-self: flex-start;
+}
 .wm-position-grid {
-  display: grid; grid-template-columns: repeat(3, 28px);
-  grid-template-rows: repeat(3, 28px); gap: 3px;
+  display: grid;
+  grid-template-columns: repeat(3, 28px);
+  grid-template-rows: repeat(3, 28px);
+  gap: 3px;
 }
 .wm-pos-btn {
-  width: 28px; height: 28px; border: 1px solid #cbd5e1; border-radius: 5px;
-  background: white; cursor: pointer; font-size: 13px;
-  display: flex; align-items: center; justify-content: center;
-  transition: all 0.15s; padding: 0; color: #64748b;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: white;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  padding: 0;
+  color: #64748b;
 }
-.wm-pos-btn:hover      { background: #eff6ff; border-color: #3b82f6; color: #3b82f6; }
-.wm-pos-btn--active    { background: #3b82f6; border-color: #3b82f6; color: white; }
-.wm-position-name { margin: 6px 0 0; font-size: 11px; color: #3b82f6; font-weight: 600; }
+.wm-pos-btn:hover   { background: #eff6ff; border-color: #3b82f6; color: #3b82f6; }
+.wm-pos-btn--active { background: #3b82f6; border-color: #3b82f6; color: white; }
+.wm-position-name {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: #3b82f6;
+  font-weight: 600;
+}
 
-/* ── Preview chung ── */
+/* ── Preview section (dùng chung cho ảnh và video) ── */
 .wm-preview-section { margin-top: 16px; }
-.wm-preview-title   { font-size: 12px; color: #64748b; margin: 0 0 8px; }
-.wm-preview-header  { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-.wm-preview-filename {
-  font-size: 11px; color: #94a3b8; margin: 0 0 8px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.wm-preview-title {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0 0 8px;
 }
-.wm-preview-nav { display: flex; align-items: center; gap: 6px; }
+
+/* Header của image preview (tiêu đề + navigation) */
+.wm-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.wm-preview-filename {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 0 0 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Nút điều hướng ảnh ‹ / › */
+.wm-preview-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .wm-nav-btn {
-  background: #e2e8f0; border: none; border-radius: 50%; width: 26px; height: 26px;
-  font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center;
-  color: #475569; padding: 0; transition: background 0.15s;
+  background: #e2e8f0;
+  border: none;
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #475569;
+  padding: 0;
+  transition: background 0.15s;
 }
 .wm-nav-btn:hover:not(:disabled) { background: #3b82f6; color: white; }
 .wm-nav-btn:disabled { opacity: 0.3; cursor: default; }
-.wm-nav-counter { font-size: 12px; color: #64748b; font-weight: 600; min-width: 36px; text-align: center; }
-
-/* Canvas ảnh */
-.wm-canvas {
-  max-width: 100%; border-radius: 6px; margin: 0 auto;
-  border: 1px solid #e2e8f0; display: block;
+.wm-nav-counter {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+  min-width: 36px;
+  text-align: center;
 }
 
-/* ── Video canvas + controls ── */
-.vc-wrap    { background: #000; border-radius: 10px; overflow: hidden; }
-.vc-canvas  { width: 50%; margin: 0 auto; display: block; }           /* full width, không có padding */
+/* Canvas hiển thị preview ảnh */
+.wm-canvas {
+  max-width: 100%;
+  border-radius: 6px;
+  margin: 0 auto;
+  border: 1px solid #e2e8f0;
+  display: block;
+}
+
+/* ── Video canvas + thanh controls ── */
+.vc-wrap {
+  background: #000;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.vc-canvas {
+  width: 100%;   /* chiếm full chiều rộng của .vc-wrap */
+  display: block;
+}
 .vc-controls {
-  display: flex; align-items: center; gap: 8px; padding: 6px 10px;
-  background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
 }
 .vc-btn {
-  background: none; border: none; color: white; cursor: pointer;
-  font-size: 16px; padding: 0 2px; flex-shrink: 0;
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 2px;
+  flex-shrink: 0;
 }
-.vc-seek   { flex: 1; height: 4px; accent-color: #3b82f6; cursor: pointer; }
-.vc-time   { font-size: 11px; color: #cbd5e1; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.vc-volume { width: 60px; height: 4px; accent-color: #3b82f6; cursor: pointer; flex-shrink: 0; }
+.vc-seek {
+  flex: 1;
+  height: 4px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+.vc-time {
+  font-size: 11px;
+  color: #cbd5e1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.vc-volume {
+  width: 60px;
+  height: 4px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+  flex-shrink: 0;
+}
 </style>
