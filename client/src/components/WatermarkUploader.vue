@@ -270,7 +270,7 @@ const startLoop = () => {
 
         // Vẽ logo từ cache (sync, không await)
         if (wmImg) {
-          const wmW = Math.round(dispW * 0.12)
+          const wmW = Math.round(dispW * 0.20)
           const wmH = Math.round(wmW / wmImg.naturalWidth * wmImg.naturalHeight)
           const pad = Math.max(8, Math.round(15 * scale))
           const { x, y } = getLogoPosition(store.watermarkPosition, dispW, dispH, wmW, wmH, pad)
