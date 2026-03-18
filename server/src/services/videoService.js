@@ -11,13 +11,13 @@ const DEFAULT_WATERMARK = process.env.WATERMARK_PATH
 
 // Các preset bitrate — null = giữ nguyên gốc
 const PRESETS = {
-  'Original': { video: null,      audio: null,    scale: null },
-  '4K':       { video: '20000k',  audio: '320k',  scale: 3840 },
-  '1080p':    { video: '8000k',   audio: '192k',  scale: 1920 },
-  '720p':     { video: '4000k',   audio: '128k',  scale: 1280 },
-  '480p':     { video: '2000k',   audio: '96k',   scale: 854  },
-  '360p':     { video: '1000k',   audio: '64k',   scale: 640  },
-  '240p':     { video: '500k',    audio: '48k',   scale: 426  },
+  'Original': { video: null,     audio: null,    scale: null },
+  '4K':       { video: '20000k', audio: '320k',  scale: 3840 },
+  '1080p':    { video: '8000k',  audio: '192k',  scale: 1920 },
+  '720p':     { video: '4000k',  audio: '128k',  scale: 1280 },
+  '480p':     { video: '2000k',  audio: '96k',   scale: 854  },
+  '360p':     { video: '1000k',  audio: '64k',   scale: 640  },
+  '240p':     { video: '500k',   audio: '48k',   scale: 426  },
 }
 
 // Vị trí overlay watermark trong FFmpeg expression
@@ -53,7 +53,10 @@ const processVideo = (inputPath, outputPath, preset = '720p', wmPath = null, wmP
     // Bước 2: Thêm watermark logo nếu có
     if (hasWm) {
       cmd.input(wm)
-      // scale2ref: scale logo = 20% chiều rộng video (thay vì 15% của chính logo)
+      // Scale logo = 20% chiều rộng video đã scale.
+      // Dùng scale2ref đúng thứ tự: [logo][video_ref] → main=logo, ref=video
+      // main_w trong scale2ref = chiều rộng của ref (video) → logo = 20% video width
+      // trunc(...*0.20/2)*2 đảm bảo width/height chia hết 2 (yêu cầu của libx264)
       filters.push('[1:v][scaled]scale2ref=w=trunc(main_w*0.20/2)*2:h=trunc(ow/a/2)*2[wm][vid]')
       filters.push(`[vid][wm]overlay=${overlayExpr}[out]`)
     } else {
@@ -73,7 +76,7 @@ const processVideo = (inputPath, outputPath, preset = '720p', wmPath = null, wmP
 
     cmd
       .output(outputPath)
-      .on('start', cmd  => console.log('[FFmpeg] start:', cmd.slice(0, 120) + '...'))
+      .on('start', c  => console.log('[FFmpeg] start:', c.slice(0, 120) + '...'))
       .on('progress', p => p.percent && process.stdout.write(`\r[FFmpeg] ${p.percent.toFixed(1)}%`))
       .on('end', () => {
         console.log(`\n[FFmpeg] done → ${outputPath}`)

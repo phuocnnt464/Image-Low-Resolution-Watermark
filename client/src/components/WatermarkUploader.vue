@@ -75,7 +75,7 @@
     <div v-if="isVideo && store.selectedFile" class="wm-preview-section">
       <p class="wm-preview-title">👁 Preview video với Logo:</p>
 
-      <!-- Video ẩn để decode frame (visibility:hidden thay vì display:none — browser mới decode được) -->
+      <!-- Video ẩn để decode frame (visibility:hidden — browser mới decode được, display:none thì không) -->
       <video
         ref="videoEl"
         :src="store.previewUrl"
@@ -135,9 +135,9 @@ const currentTime = ref(0)
 const duration    = ref(0)
 
 // RAF loop & watermark image cache
-let rafId  = null
-let wmImg  = null   // HTMLImageElement đã load
-let wmSrc  = ''     // src đã load để tránh reload lại
+let rafId = null
+let wmImg = null  // HTMLImageElement đã load
+let wmSrc = ''    // src đã load để tránh reload lại
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const POSITIONS = [
@@ -169,7 +169,7 @@ const onDrop = (e) => {
   if (file) store.setWatermark(file)
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 // Format giây → "1:23"
 const fmt = (s) => {
   if (!s || isNaN(s)) return '0:00'
@@ -185,8 +185,8 @@ const getLogoPosition = (pos, cW, cH, wmW, wmH, pad) => {
     'top-center':    [cx,             pad],
     'top-right':     [cW - wmW - pad, pad],
     'center-left':   [pad,            cy],
-    'center':        [cx,             cy],
     'center-right':  [cW - wmW - pad, cy],
+    'center':        [cx,             cy],
     'bottom-left':   [pad,            cH - wmH - pad],
     'bottom-center': [cx,             cH - wmH - pad],
     'bottom-right':  [cW - wmW - pad, cH - wmH - pad],
@@ -195,10 +195,13 @@ const getLogoPosition = (pos, cW, cH, wmW, wmH, pad) => {
   return { x: Math.max(0, x), y: Math.max(0, y) }
 }
 
-// Load watermark image, dùng cache để không load lại mỗi frame
+// Load watermark image, dùng cache để không load lại mỗi frame.
+// Chỉ load khi user đã upload logo — KHÔNG fallback về /assets/ vì file đó
+// nằm trên server, không phải client/public, sẽ 404 trên Vite dev server.
 const getWmImg = () => new Promise((resolve) => {
-  const src = store.watermarkUrl || '/assets/watermark.png'
-  if (wmSrc === src && wmImg) return resolve(wmImg)   // đã cache
+  const src = store.watermarkUrl   // rỗng nếu chưa upload
+  if (!src) return resolve(null)   // chưa có logo → không vẽ gì ở preview
+  if (wmSrc === src && wmImg) return resolve(wmImg)  // đã cache
   const img = new Image()
   img.crossOrigin = 'anonymous'
   img.onload  = () => { wmImg = img; wmSrc = src; resolve(img) }
@@ -206,7 +209,7 @@ const getWmImg = () => new Promise((resolve) => {
   img.src = src
 })
 
-// Vẽ source (HTMLImageElement hoặc HTMLVideoElement) + logo lên canvas
+// Vẽ ảnh + logo lên canvas (dùng cho image preview)
 const drawToCanvas = async (source, sourceW, sourceH) => {
   const canvas = canvasRef.value
   if (!canvas || !sourceW || !sourceH) return
@@ -216,7 +219,7 @@ const drawToCanvas = async (source, sourceW, sourceH) => {
   const dispW = Math.round(sourceW * scale)
   const dispH = Math.round(sourceH * scale)
 
-  if (canvas.width !== dispW)  canvas.width  = dispW
+  if (canvas.width  !== dispW) canvas.width  = dispW
   if (canvas.height !== dispH) canvas.height = dispH
 
   const ctx = canvas.getContext('2d')
@@ -225,14 +228,14 @@ const drawToCanvas = async (source, sourceW, sourceH) => {
   const wm = await getWmImg()
   if (!wm) return
 
-  const wmW = Math.round(dispW * 0.20)              // logo = 20% chiều rộng
+  const wmW = Math.round(dispW * 0.20)
   const wmH = Math.round(wmW / wm.naturalWidth * wm.naturalHeight)
   const pad = Math.max(8, Math.round(15 * scale))
   const { x, y } = getLogoPosition(store.watermarkPosition, dispW, dispH, wmW, wmH, pad)
   ctx.drawImage(wm, x, y, wmW, wmH)
 }
 
-// ─── Image preview ────────────────────────────────────────────────────────────
+// ─── Image preview ──────────────────────���─────────────────────────────────────
 const drawImagePreview = async () => {
   await nextTick()
   const url = store.previewUrls?.[imgIndex.value]
@@ -251,7 +254,7 @@ const stopLoop = () => {
 // Loop chạy sync (không async) để không bỏ lỡ frame
 const startLoop = () => {
   stopLoop()
-  // Preload watermark image trước khi loop bắt đầu
+  // Preload watermark trước để wmImg có sẵn trong cache khi loop bắt đầu
   getWmImg().then(() => {
     const tick = () => {
       const video  = videoEl.value
@@ -268,7 +271,7 @@ const startLoop = () => {
         const ctx = canvas.getContext('2d')
         ctx.drawImage(video, 0, 0, dispW, dispH)
 
-        // Vẽ logo từ cache (sync, không await)
+        // Vẽ logo từ cache (sync, không await — đảm bảo 60fps)
         if (wmImg) {
           const wmW = Math.round(dispW * 0.20)
           const wmH = Math.round(wmW / wmImg.naturalWidth * wmImg.naturalHeight)
@@ -287,12 +290,12 @@ const startLoop = () => {
 const bindVideoEvents = () => {
   const v = videoEl.value
   if (!v) return
-  v.addEventListener('timeupdate',    () => { currentTime.value = v.currentTime })
-  v.addEventListener('durationchange',() => { duration.value    = v.duration })
-  v.addEventListener('play',          () => { isPlaying.value   = true  })
-  v.addEventListener('pause',         () => { isPlaying.value   = false })
-  v.addEventListener('ended',         () => { isPlaying.value   = false })
-  v.addEventListener('volumechange',  () => { volume.value = v.volume; isMuted.value = v.muted })
+  v.addEventListener('timeupdate',     () => { currentTime.value = v.currentTime })
+  v.addEventListener('durationchange', () => { duration.value    = v.duration })
+  v.addEventListener('play',           () => { isPlaying.value   = true  })
+  v.addEventListener('pause',          () => { isPlaying.value   = false })
+  v.addEventListener('ended',          () => { isPlaying.value   = false })
+  v.addEventListener('volumechange',   () => { volume.value = v.volume; isMuted.value = v.muted })
 }
 
 const onVideoReady = () => {
@@ -306,10 +309,10 @@ const onVideoReady = () => {
 }
 
 // ─── Video controls ───────────────────────────────────────────────────────────
-const togglePlay  = () => { const v = videoEl.value; if (!v) return; v.paused ? v.play() : v.pause() }
-const toggleMute  = () => { const v = videoEl.value; if (!v) return; v.muted = !v.muted }
-const onSeek      = (e) => { const v = videoEl.value; if (!v) return; v.currentTime = +e.target.value }
-const onVolume    = (e) => {
+const togglePlay = () => { const v = videoEl.value; if (!v) return; v.paused ? v.play() : v.pause() }
+const toggleMute = () => { const v = videoEl.value; if (!v) return; v.muted = !v.muted }
+const onSeek     = (e) => { const v = videoEl.value; if (!v) return; v.currentTime = +e.target.value }
+const onVolume   = (e) => {
   const v = videoEl.value
   if (!v) return
   v.volume = +e.target.value
@@ -324,12 +327,13 @@ watch(() => store.previewUrls?.length, (len) => {
 
 // Cả hai: vẽ lại khi đổi logo hoặc đổi vị trí
 watch(() => store.watermarkUrl, () => {
-  wmImg = null; wmSrc = ''    // xoá cache để load logo mới
+  wmImg = null; wmSrc = ''   // xoá cache để load logo mới
   if (!isVideo.value) drawImagePreview()
+  else getWmImg()            // video: preload logo mới vào cache ngay
 })
 watch(() => store.watermarkPosition, () => {
   if (!isVideo.value) drawImagePreview()
-  // video: loop tự re-draw frame tiếp theo
+  // video: loop tự re-draw frame tiếp theo với vị trí mới
 })
 
 // Ảnh: vẽ lại khi chuyển trang
@@ -419,8 +423,8 @@ onUnmounted(() => stopLoop())
   display: flex; align-items: center; justify-content: center;
   transition: all 0.15s; padding: 0; color: #64748b;
 }
-.wm-pos-btn:hover          { background: #eff6ff; border-color: #3b82f6; color: #3b82f6; }
-.wm-pos-btn--active        { background: #3b82f6; border-color: #3b82f6; color: white; }
+.wm-pos-btn:hover      { background: #eff6ff; border-color: #3b82f6; color: #3b82f6; }
+.wm-pos-btn--active    { background: #3b82f6; border-color: #3b82f6; color: white; }
 .wm-position-name { margin: 6px 0 0; font-size: 11px; color: #3b82f6; font-weight: 600; }
 
 /* ── Preview chung ── */
@@ -443,13 +447,13 @@ onUnmounted(() => stopLoop())
 
 /* Canvas ảnh */
 .wm-canvas {
-  max-width: 50%; border-radius: 6px; margin: 0 auto;
+  max-width: 100%; border-radius: 6px; margin: 0 auto;
   border: 1px solid #e2e8f0; display: block;
 }
 
 /* ── Video canvas + controls ── */
-.vc-wrap   { background: #fff; border-radius: 10px; overflow: hidden;  }
-.vc-canvas { width: 50%; border-radius: 15px; padding: 6px; margin: 0 auto; display: block; }
+.vc-wrap    { background: #000; border-radius: 10px; overflow: hidden; }
+.vc-canvas  { width: 50%; margin: 0 auto; display: block; }           /* full width, không có padding */
 .vc-controls {
   display: flex; align-items: center; gap: 8px; padding: 6px 10px;
   background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
