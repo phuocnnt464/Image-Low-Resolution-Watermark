@@ -3,7 +3,6 @@ const express    = require('express');
 const cors       = require('cors');
 const path       = require('path');
 const bodyParser = require('body-parser');
-const initDB     = require('./src/config/initDB');
 const imageRoutes = require('./src/routes/imageRoutes');
 const videoRoutes = require('./src/routes/videoRoutes');
 
@@ -25,14 +24,6 @@ app.use((req, res) => {
   res.status(404).json({ message: `${req.originalUrl} not found` });
 });
 
-// Khởi động server sau khi init DB xong
-initDB()
-  .then(() => {
-    app.listen(port, () => {
-      console.log(`🚀 Server running on http://localhost:${port}`);
-    });
-  })
-  .catch((err) => {
-    console.error('❌ Cannot start server:', err);
-    process.exit(1);
-  });
+app.listen(port, () => {
+  console.log(`🚀 Server running on http://localhost:${port}`);
+});
