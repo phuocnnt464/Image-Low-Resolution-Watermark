@@ -172,7 +172,7 @@ let rafId         = null  // ID của requestAnimationFrame hiện tại
 let cachedWmImage = null  // HTMLImageElement đã load sẵn
 let cachedWmSrc   = ''    // URL đã load để so sánh tránh load lại
 
-// ─── Hằng số ──────────────���───────────────────────────────────────────────────
+// ─── Hằng số ──────────────────────────────────────────────────────────────────
 const POSITIONS = [
   { value: 'top-left',      label: 'Trên trái',   icon: '↖' },
   { value: 'top-center',    label: 'Trên giữa',   icon: '↑' },
@@ -222,15 +222,15 @@ function getLogoXY(position, canvasW, canvasH, logoW, logoH, padding) {
   const centerY = Math.round((canvasH - logoH) / 2)
 
   const positionMap = {
-    'top-left':      { x: padding,               y: padding },
-    'top-center':    { x: centerX,               y: padding },
-    'top-right':     { x: canvasW - logoW - padding, y: padding },
-    'center-left':   { x: padding,               y: centerY },
-    'center':        { x: centerX,               y: centerY },
-    'center-right':  { x: canvasW - logoW - padding, y: centerY },
-    'bottom-left':   { x: padding,               y: canvasH - logoH - padding },
-    'bottom-center': { x: centerX,               y: canvasH - logoH - padding },
-    'bottom-right':  { x: canvasW - logoW - padding, y: canvasH - logoH - padding },
+    'top-left':      { x: padding,                    y: padding },
+    'top-center':    { x: centerX,                    y: padding },
+    'top-right':     { x: canvasW - logoW - padding,  y: padding },
+    'center-left':   { x: padding,                    y: centerY },
+    'center':        { x: centerX,                    y: centerY },
+    'center-right':  { x: canvasW - logoW - padding,  y: centerY },
+    'bottom-left':   { x: padding,                    y: canvasH - logoH - padding },
+    'bottom-center': { x: centerX,                    y: canvasH - logoH - padding },
+    'bottom-right':  { x: canvasW - logoW - padding,  y: canvasH - logoH - padding },
   }
 
   const result = positionMap[position] || positionMap['bottom-left']
@@ -241,11 +241,12 @@ function getLogoXY(position, canvasW, canvasH, logoW, logoH, padding) {
 }
 
 // Load watermark image, dùng cache để không load lại mỗi frame.
-// Fallback về /watermark.png (đặt trong client/public/) nếu user chưa upload logo.
+// Fallback về /assets/watermark.png (serve từ backend) nếu user chưa upload logo.
 function loadWatermarkImage() {
   return new Promise((resolve) => {
-    // Dùng logo user upload nếu có, ngược lại dùng logo mặc định từ public/
-    const src = store.watermarkUrl || '/watermark.png'
+    // 🔴 FIX 1: đổi '/watermark.png' → '/assets/watermark.png'
+    // Vite proxy '/assets' → backend:3000, nơi file watermark.png thực sự nằm
+    const src = store.watermarkUrl || '/assets/watermark.png'
 
     // Nếu đã cache src này rồi thì trả về luôn, không load lại
     if (cachedWmSrc === src && cachedWmImage) {
@@ -263,7 +264,8 @@ function loadWatermarkImage() {
 
     img.onerror = () => {
       cachedWmImage = null
-      cachedWmSrc   = ''
+      // 🔴 FIX 2: giữ lại src đã thử thất bại để không retry vô hạn
+      cachedWmSrc   = src
       resolve(null) // load thất bại → không vẽ logo, không crash
     }
 
@@ -315,7 +317,7 @@ async function drawImagePreview() {
   img.src         = url
 }
 
-// ─── Video preview — RAF loop ─────────────────────────────────────────────────
+// ─── Video preview — RAF loop ─────────────────────────────────────────────
 function stopRafLoop() {
   if (rafId !== null) {
     cancelAnimationFrame(rafId)
@@ -372,7 +374,7 @@ function bindVideoEvents() {
   video.addEventListener('pause',          () => { isPlaying.value   = false })
   video.addEventListener('ended',          () => { isPlaying.value   = false })
   video.addEventListener('volumechange',   () => {
-    volume.value = video.volume
+    volume.value  = video.volume
     isMuted.value = video.muted
   })
 }
@@ -390,7 +392,7 @@ function onVideoReady() {
   startRafLoop()
 }
 
-// ─── Video controls ────────────────��──────────────────────────────────────────
+// ─── Video controls ───────────────────────────────────────────────────────────
 function togglePlay() {
   const video = videoEl.value
   if (!video) return
@@ -681,7 +683,7 @@ onUnmounted(() => stopRafLoop())
   overflow: hidden;
 }
 .vc-canvas {
-  width: 100%;   /* chiếm full chiều rộng của .vc-wrap */
+  width: 100%;
   display: block;
 }
 .vc-controls {
