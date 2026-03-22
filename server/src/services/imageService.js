@@ -6,7 +6,7 @@ require('dotenv').config();
 const DEFAULT_WATERMARK_PATH = process.env.WATERMARK_PATH
   || path.resolve(__dirname, '../../assets/watermark.png');
 
-const WATERMARK_RATIO = 0.15;
+const WATERMARK_RATIO = 0.20;
 const PADDING         = 15;
 
 /**

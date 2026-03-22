@@ -53,11 +53,12 @@ const processVideo = (inputPath, outputPath, preset = '720p', wmPath = null, wmP
     // Bước 2: Thêm watermark logo nếu có
     if (hasWm) {
       cmd.input(wm)
-      // Scale logo = 20% chiều rộng video đã scale.
-      // Dùng scale2ref đúng thứ tự: [logo][video_ref] → main=logo, ref=video
-      // main_w trong scale2ref = chiều rộng của ref (video) → logo = 20% video width
-      // trunc(...*0.20/2)*2 đảm bảo width/height chia hết 2 (yêu cầu của libx264)
-      filters.push('[1:v][scaled]scale2ref=w=trunc(main_w*0.20/2)*2:h=trunc(ow/a/2)*2[wm][vid]')
+      // 🔴 FIX: scale2ref — [main=logo][ref=video]
+      // Trong scale2ref: iw/ih là kích thước của REF (video đã scale)
+      // main_w/main_h là kích thước của MAIN (logo gốc) — KHÔNG phải video
+      // → Phải dùng 'iw' để lấy chiều rộng video, từ đó logo = 20% video width
+      // trunc(...*0.20/2)*2 đảm bảo width/height chia hết 2 (yêu cầu libx264)
+      filters.push('[1:v][scaled]scale2ref=w=trunc(iw*0.20/2)*2:h=trunc(ow/a/2)*2[wm][vid]')
       filters.push(`[vid][wm]overlay=${overlayExpr}[out]`)
     } else {
       filters.push('[scaled]null[out]')
