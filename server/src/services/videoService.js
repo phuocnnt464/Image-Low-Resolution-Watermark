@@ -1,8 +1,8 @@
-const ffmpeg     = require('fluent-ffmpeg')
-const ffmpegPath = require('ffmpeg-static')
+const ffmpeg      = require('fluent-ffmpeg')
+const ffmpegPath  = require('ffmpeg-static')
 const ffprobePath = require('ffprobe-static').path
-const fs         = require('fs')
-const path       = require('path')
+const fs          = require('fs')
+const path        = require('path')
 require('dotenv').config()
 
 ffmpeg.setFfmpegPath(ffmpegPath)
@@ -11,15 +11,27 @@ ffmpeg.setFfprobePath(ffprobePath)
 const DEFAULT_WATERMARK = process.env.WATERMARK_PATH
   || path.resolve(__dirname, '../../assets/watermark.png')
 
-// Các preset bitrate — null = giữ nguyên gốc
+// ── Preset: scale = target width (null = giữ nguyên), crf = chất lượng (thấp = nét hơn)
+// Bỏ bitrate cố định, dùng CRF 1-pass → nhanh hơn đáng kể so với -b:v + -maxrate
 const PRESETS = {
-  'Original': { video: null,     audio: null,    scale: null },
-  '4K':       { video: '20000k', audio: '320k',  scale: 3840 },
-  '1080p':    { video: '8000k',  audio: '192k',  scale: 1920 },
-  '720p':     { video: '4000k',  audio: '128k',  scale: 1280 },
-  '480p':     { video: '2000k',  audio: '96k',   scale: 854  },
-  '360p':     { video: '1000k',  audio: '64k',   scale: 640  },
-  '240p':     { video: '500k',   audio: '48k',   scale: 426  },
+  'Original': { crf: 18, scale: null  },  // giữ nguyên kích thước, chất lượng cao
+  '4K':       { crf: 18, scale: 3840  },
+  '1080p':    { crf: 20, scale: 1920  },
+  '720p':     { crf: 22, scale: 1280  },
+  '480p':     { crf: 24, scale: 854   },
+  '360p':     { crf: 26, scale: 640   },
+  '240p':     { crf: 28, scale: 426   },
+}
+
+// Audio bitrate theo preset (thấp hơn = nhỏ hơn, đủ nghe)
+const AUDIO_BITRATE = {
+  'Original': '192k',
+  '4K':       '192k',
+  '1080p':    '192k',
+  '720p':     '128k',
+  '480p':     '96k',
+  '360p':     '64k',
+  '240p':     '48k',
 }
 
 // Vị trí overlay watermark trong FFmpeg expression
@@ -52,35 +64,33 @@ const processVideo = async (inputPath, outputPath, preset = '720p', wmPath = nul
     try {
       const wm          = wmPath || DEFAULT_WATERMARK
       const hasWm       = fs.existsSync(wm)
-      const { video, audio, scale } = PRESETS[preset] ?? PRESETS['720p']
+      const { crf, scale } = PRESETS[preset] ?? PRESETS['720p']
+      const audioBitrate = AUDIO_BITRATE[preset] ?? '128k'
       const overlayExpr = OVERLAY_POSITIONS[wmPosition] || OVERLAY_POSITIONS['bottom-left']
 
-      // ── Tính kích thước video sau khi scale để biết logo width cần bao nhiêu ──
-      // Giống imageService: logo width = 20% video width, height tự giữ tỉ lệ
+      // ── Tính logo width = 20% video width sau preset ──────────────────────────
       let logoW = null
       if (hasWm) {
         const { width: origW } = await getVideoSize(inputPath)
-        // Video width sau preset (nếu gốc nhỏ hơn preset thì giữ nguyên gốc)
         const finalVideoW = (scale !== null && origW > scale) ? scale : origW
-        // Logo width = 20% video width, chia hết 2 (yêu cầu libx264)
+        // Chia hết 2 — yêu cầu của libx264
         logoW = Math.max(2, Math.floor(finalVideoW * 0.20 / 2) * 2)
       }
 
-      const cmd = ffmpeg(inputPath)
+      const cmd     = ffmpeg(inputPath)
       const filters = []
 
-      // Bước 1: Scale video (hoặc passthrough nếu Original)
+      // Bước 1: Scale video
       if (scale !== null) {
         filters.push(`[0:v]scale=w=if(gt(iw\\,${scale})\\,${scale}\\,iw):h=-2[scaled]`)
       } else {
         filters.push('[0:v]null[scaled]')
       }
 
-      // Bước 2: Thêm watermark logo nếu có
+      // Bước 2: Watermark
       if (hasWm) {
         cmd.input(wm)
-        // Scale logo về đúng logoW px chiều ngang, h=-2 giữ tỉ lệ gốc tự động
-        // → giống Sharp: wmW = resW * 0.20, wmH = wmW * (logo_h/logo_w)
+        // scale=w=logoW:h=-2 → giữ đúng tỉ lệ gốc logo (giống Sharp imageService)
         filters.push(`[1:v]scale=w=${logoW}:h=-2[wm]`)
         filters.push(`[scaled][wm]overlay=${overlayExpr}[out]`)
       } else {
@@ -89,14 +99,19 @@ const processVideo = async (inputPath, outputPath, preset = '720p', wmPath = nul
 
       cmd.complexFilter(filters, 'out')
 
-      // Bước 3: Video codec
-      cmd.outputOptions(['-c:v libx264', '-preset fast', '-pix_fmt yuv420p', '-movflags +faststart'])
-      if (video) {
-        cmd.outputOptions([`-b:v ${video}`, `-maxrate ${video}`, `-bufsize ${video}`])
-      }
+      // Bước 3: Video codec — tối ưu tốc độ encode
+      cmd.outputOptions([
+        '-c:v libx264',
+        '-preset ultrafast',   // ✅ nhanh gấp ~3-5x so với 'fast', chất lượng vẫn ổn
+        '-tune fastdecode',    // ✅ tối ưu encode nhanh + decode nhanh
+        `-crf ${crf}`,         // ✅ CRF 1-pass thay vì bitrate cố định (nhanh hơn, ổn định hơn)
+        '-pix_fmt yuv420p',
+        '-movflags +faststart',
+        '-threads 0',          // ✅ dùng tất cả CPU core có sẵn
+      ])
 
       // Bước 4: Audio
-      cmd.outputOptions(['-map 0:a?', '-c:a aac', `-b:a ${audio || '192k'}`])
+      cmd.outputOptions(['-map 0:a?', '-c:a aac', `-b:a ${audioBitrate}`])
 
       cmd
         .output(outputPath)
