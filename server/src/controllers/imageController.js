@@ -26,8 +26,8 @@ const processImages = async (req, res) => {
     return res.status(400).json({ message: 'Không có ảnh nào được upload' });
   }
 
-  const rawPreset        = req.body.resolutionPreset || 'FHD';
-  const resolutionPreset = VALID_PRESETS.includes(rawPreset) ? rawPreset : 'FHD';
+  const rawPreset         = req.body.resolutionPreset || 'FHD';
+  const resolutionPreset  = VALID_PRESETS.includes(rawPreset) ? rawPreset : 'FHD';
   const watermarkPosition = req.body.watermarkPosition || 'bottom-left';
   const inputPaths        = imageFiles.map((f) => f.path);
 
@@ -58,8 +58,8 @@ const processImages = async (req, res) => {
         originalHeight:    null,
         processedWidth:    null,
         processedHeight:   null,
-        resolutionPreset,          
-        watermarkApplied:  hasCustomWatermark,
+        resolutionPreset,
+        watermarkApplied:  true, // 🔴 FIX: luôn true vì mặc định cũng có watermark
         status:            'pending',
       });
 
