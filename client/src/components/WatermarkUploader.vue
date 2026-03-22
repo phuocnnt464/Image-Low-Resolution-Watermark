@@ -678,13 +678,16 @@ onUnmounted(() => stopRafLoop())
 
 /* ── Video canvas + thanh controls ── */
 .vc-wrap {
-  background: #000;
+  background: #cbd5e1;
   border-radius: 10px;
   overflow: hidden;
 }
 .vc-canvas {
-  width: 100%;
+  max-height: 480px;
+  margin: 5px auto;
+  border-radius: 5px;
   display: block;
+  object-fit: contain;
 }
 .vc-controls {
   display: flex;
