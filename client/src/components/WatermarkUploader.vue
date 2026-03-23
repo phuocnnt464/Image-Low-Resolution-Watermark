@@ -83,11 +83,6 @@
     <div v-if="isVideo && store.selectedFile" class="wm-preview-section">
       <p class="wm-preview-title">👁 Preview video với Logo:</p>
 
-      <!--
-        Video element ẩn để browser decode frame liên tục.
-        Dùng visibility:hidden thay vì display:none vì display:none
-        khiến browser không decode video → canvas trống.
-      -->
       <video
         ref="videoEl"
         :src="store.previewUrl"
@@ -146,8 +141,6 @@ const props = defineProps({
 })
 const store = props.store
 
-// Phân biệt đây là video store hay image store
-// Video store có "selectedFile" (một file), image store có "selectedFiles" (nhiều file)
 const isVideo = computed(() => {
   return 'selectedFile' in store && !('selectedFiles' in store)
 })
@@ -156,21 +149,21 @@ const isVideo = computed(() => {
 const fileInput  = ref(null)  
 const canvasRef  = ref(null)  // ref tới <canvas> hiển thị preview
 const videoEl    = ref(null)  // ref tới <video> ẩn dùng để decode frame
-const isDragging = ref(false) // trạng thái kéo file vào drop zone
-const imgIndex   = ref(0)     // index ảnh đang xem trong danh sách
+const isDragging = ref(false) 
+const imgIndex   = ref(0)    
 
 // Trạng thái video player
-const videoReady  = ref(false) // video đã load xong metadata chưa
-const isPlaying   = ref(false) // đang phát hay đang dừng
-const isMuted     = ref(false) // đang tắt tiếng hay không
-const volume      = ref(1)     // âm lượng (0.0 - 1.0)
-const currentTime = ref(0)     // vị trí hiện tại (giây)
-const duration    = ref(0)     // tổng thời lượng (giây)
+const videoReady  = ref(false) 
+const isPlaying   = ref(false) 
+const isMuted     = ref(false) 
+const volume      = ref(1)     
+const currentTime = ref(0)     
+const duration    = ref(0)     
 
 // Cache watermark image để RAF loop không phải load lại mỗi frame
-let rafId         = null  // ID của requestAnimationFrame hiện tại
-let cachedWmImage = null  // HTMLImageElement đã load sẵn
-let cachedWmSrc   = ''    // URL đã load để so sánh tránh load lại
+let rafId         = null  
+let cachedWmImage = null  
+let cachedWmSrc   = ''  
 
 // ─── Hằng số ──────────────────────────────────────────────────────────────────
 const POSITIONS = [
@@ -206,14 +199,14 @@ function onDrop(event) {
 
 // ─── Hàm tiện ích ─────────────────────────────────────────────────────────────
 
-// Chuyển giây sang chuỗi "m:ss" (ví dụ 75 → "1:15")
+// Chuyển giây sang chuỗi "m:ss" 
 function formatTime(seconds) {
   if (!seconds || isNaN(seconds)) return '0:00'
   const minutes = Math.floor(seconds / 60)
   const secs    = String(Math.floor(seconds % 60)).padStart(2, '0')
   return `${minutes}:${secs}`
 }
-// Dùng tên ngắn fmt trong template cho gọn
+
 const fmt = formatTime
 
 // Tính toạ độ (x, y) để vẽ logo tại vị trí đã chọn
@@ -259,8 +252,8 @@ function loadWatermarkImage() {
 
     img.onerror = () => {
       cachedWmImage = null
-      // 🔴 FIX 2: giữ lại src đã thử thất bại để không retry vô hạn
-      cachedWmSrc   = src
+      // giữ lại src đã thử thất bại để không retry vô hạn
+      cachedWmSrc   = src 
       resolve(null) // load thất bại → không vẽ logo, không crash
     }
 
@@ -436,12 +429,10 @@ watch(() => store.watermarkUrl, () => {
   }
 })
 
-// Cả hai: khi user đổi vị trí logo
 watch(() => store.watermarkPosition, () => {
   if (!isVideo.value) {
     drawImagePreview()
   }
-  // Video: RAF loop tự vẽ lại frame tiếp theo với vị trí mới → không cần làm gì thêm
 })
 
 // Ảnh: vẽ lại khi user chuyển trang ảnh

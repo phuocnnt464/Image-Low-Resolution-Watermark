@@ -11,10 +11,8 @@ ffmpeg.setFfprobePath(ffprobePath)
 const DEFAULT_WATERMARK = process.env.WATERMARK_PATH
   || path.resolve(__dirname, '../../assets/watermark.png')
 
-// ── Preset: scale = target width (null = giữ nguyên), crf = chất lượng (thấp = nét hơn)
-// Bỏ bitrate cố định, dùng CRF 1-pass → nhanh hơn đáng kể so với -b:v + -maxrate
 const PRESETS = {
-  'Original': { crf: 18, scale: null  },  // giữ nguyên kích thước, chất lượng cao
+  'Original': { crf: 18, scale: null  },  
   '4K':       { crf: 18, scale: 3840  },
   '1080p':    { crf: 20, scale: 1920  },
   '720p':     { crf: 22, scale: 1280  },
@@ -68,12 +66,10 @@ const processVideo = async (inputPath, outputPath, preset = '720p', wmPath = nul
       const audioBitrate = AUDIO_BITRATE[preset] ?? '128k'
       const overlayExpr = OVERLAY_POSITIONS[wmPosition] || OVERLAY_POSITIONS['bottom-left']
 
-      // ── Tính logo width = 20% video width sau preset ──────────────────────────
       let logoW = null
       if (hasWm) {
         const { width: origW } = await getVideoSize(inputPath)
         const finalVideoW = (scale !== null && origW > scale) ? scale : origW
-        // Chia hết 2 — yêu cầu của libx264
         logoW = Math.max(2, Math.floor(finalVideoW * 0.20 / 2) * 2)
       }
 
@@ -90,7 +86,6 @@ const processVideo = async (inputPath, outputPath, preset = '720p', wmPath = nul
       // Bước 2: Watermark
       if (hasWm) {
         cmd.input(wm)
-        // scale=w=logoW:h=-2 → giữ đúng tỉ lệ gốc logo (giống Sharp imageService)
         filters.push(`[1:v]scale=w=${logoW}:h=-2[wm]`)
         filters.push(`[scaled][wm]overlay=${overlayExpr}[out]`)
       } else {
@@ -102,12 +97,12 @@ const processVideo = async (inputPath, outputPath, preset = '720p', wmPath = nul
       // Bước 3: Video codec — tối ưu tốc độ encode
       cmd.outputOptions([
         '-c:v libx264',
-        '-preset ultrafast',   // ✅ nhanh gấp ~3-5x so với 'fast', chất lượng vẫn ổn
-        '-tune fastdecode',    // ✅ tối ưu encode nhanh + decode nhanh
-        `-crf ${crf}`,         // ✅ CRF 1-pass thay vì bitrate cố định (nhanh hơn, ổn định hơn)
+        '-preset ultrafast',   
+        '-tune fastdecode',    
+        `-crf ${crf}`,        
         '-pix_fmt yuv420p',
         '-movflags +faststart',
-        '-threads 0',          // ✅ dùng tất cả CPU core có sẵn
+        '-threads 0',          
       ])
 
       // Bước 4: Audio

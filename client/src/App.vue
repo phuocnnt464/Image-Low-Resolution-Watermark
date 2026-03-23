@@ -56,7 +56,7 @@ import HistoryTable       from './components/HistoryTable.vue'
 const activeTab        = ref('image')
 const imageStore       = useImageStore()
 const videoStore       = useVideoStore()
-const videoUploaderRef = ref(null)   // ← ref tới <VideoUploader> instance
+const videoUploaderRef = ref(null)   
 
 onMounted(() => imageStore.fetchHistory())
 </script>

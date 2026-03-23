@@ -71,12 +71,10 @@ const processImage = async (
   const origH  = meta.height;
   const format = meta.format;
 
-  // ── Tham số preset ─────────────────────────────────────────────────────────
   const preset = RESOLUTION_PRESETS[resolutionPreset] ?? RESOLUTION_PRESETS['FHD'];
   const { targetWidth, jpegQuality, webpQuality, pngCompression } = preset;
 
   // ── Bước 1: Resize xuống targetWidth (giữ tỉ lệ, không phóng to) ──────────
-  // Đây là pipeline chính, output SẼ CÓ kích thước nhỏ hơn nếu targetWidth < origW
   let pipeline = sharp(inputPath);
 
   if (targetWidth !== null) {
@@ -117,12 +115,12 @@ const processImage = async (
   // ── Bước 4: Composite + encode output với quality 100% ─────────────────────
   let outputPipeline = sharp(resizedBuffer.data)
     .composite(compositeOptions)
-    .withMetadata();   // giữ toàn bộ EXIF/metadata gốc
+    .withMetadata();   
 
   switch (format) {
     case 'jpeg':
       outputPipeline = outputPipeline.jpeg({
-        quality: jpegQuality,       // 100 = không nén thêm
+        quality: jpegQuality,      
         progressive: true,
         mozjpeg: true,
       });
