@@ -10,13 +10,11 @@ const WATERMARK_RATIO = 0.20;
 const PADDING         = 15;
 
 /**
- * Bảng preset — theo đúng mẫu mẫu generateProMatrix:
- *
  *   targetWidth : resize ảnh về đúng width này (withoutEnlargement: true)
  *                 null = giữ nguyên kích thước gốc (Original)
  *   jpegQuality : quality JPEG/WebP output — giữ 100 để không mất thêm, hoặc giảm nhẹ
  *
- * Khác với cách cũ (down→up), lần này output sẽ CÓ kích thước nhỏ hơn thật sự
+ * Output CÓ kích thước nhỏ hơn thật sự
  * → file nhỏ hơn, resolution thấp hơn, rõ ràng khi xem thuộc tính ảnh.
  *
  * Nếu ảnh gốc nhỏ hơn targetWidth → withoutEnlargement giữ nguyên kích thước gốc.
