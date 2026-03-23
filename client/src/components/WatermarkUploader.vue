@@ -153,7 +153,7 @@ const isVideo = computed(() => {
 })
 
 // ─── Reactive state ───────────────────────────────────────────────────────────
-const fileInput  = ref(null)  // ref tới <input type="file"> ẩn
+const fileInput  = ref(null)  
 const canvasRef  = ref(null)  // ref tới <canvas> hiển thị preview
 const videoEl    = ref(null)  // ref tới <video> ẩn dùng để decode frame
 const isDragging = ref(false) // trạng thái kéo file vào drop zone
@@ -240,15 +240,10 @@ function getLogoXY(position, canvasW, canvasH, logoW, logoH, padding) {
   }
 }
 
-// Load watermark image, dùng cache để không load lại mỗi frame.
-// Fallback về /assets/watermark.png (serve từ backend) nếu user chưa upload logo.
 function loadWatermarkImage() {
   return new Promise((resolve) => {
-    // 🔴 FIX 1: đổi '/watermark.png' → '/assets/watermark.png'
-    // Vite proxy '/assets' → backend:3000, nơi file watermark.png thực sự nằm
     const src = store.watermarkUrl || '/assets/watermark.png'
 
-    // Nếu đã cache src này rồi thì trả về luôn, không load lại
     if (cachedWmSrc === src && cachedWmImage) {
       return resolve(cachedWmImage)
     }
@@ -471,9 +466,8 @@ watch(() => store.previewUrl, async () => {
   currentTime.value = 0
   duration.value    = 0
 
-  await nextTick() // đợi Vue cập nhật DOM (src của video element thay đổi)
+  await nextTick() 
   bindVideoEvents()
-  // Sau đó video sẽ tự phát sự kiện "canplay" → gọi onVideoReady → startRafLoop
 })
 
 onUnmounted(() => stopRafLoop())

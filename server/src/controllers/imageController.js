@@ -59,7 +59,7 @@ const processImages = async (req, res) => {
         processedWidth:    null,
         processedHeight:   null,
         resolutionPreset,
-        watermarkApplied:  true, // 🔴 FIX: luôn true vì mặc định cũng có watermark
+        watermarkApplied:  true, 
         status:            'pending',
       });
 
