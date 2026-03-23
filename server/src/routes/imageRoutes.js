@@ -1,16 +1,8 @@
-const express = require('express');
-const router  = express.Router();
-const { uploadFields } = require('../middleware/uploadMiddleware');
-const {
-  processImages,
-  getHistory,
-  getHistoryById,
-  deleteHistory,
-} = require('../controllers/imageController');
+const express = require('express')
+const router  = express.Router()
+const { uploadFields }  = require('../middleware/uploadMiddleware')
+const { processImages } = require('../controllers/imageController')
 
-router.post('/process',       uploadFields, processImages);
-router.get('/history',        getHistory);
-router.get('/history/:id',    getHistoryById);
-router.delete('/history/:id', deleteHistory);
+router.post('/process', uploadFields, processImages)
 
-module.exports = router;
+module.exports = router

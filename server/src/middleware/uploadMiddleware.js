@@ -15,7 +15,7 @@ const storage = multer.diskStorage({
   },
 })
 
-// ── File filter: (dùng cho image upload) ───────────────────────────
+// ── File filter: chỉ ảnh ───────────────────────────────────────────────────
 const imageFilter = (req, file, cb) => {
   const allowed = /jpeg|jpg|png|webp/
   const ext  = allowed.test(path.extname(file.originalname).toLowerCase())
@@ -24,7 +24,7 @@ const imageFilter = (req, file, cb) => {
   cb(new Error('Chỉ hỗ trợ file ảnh: JPEG, PNG, WEBP'))
 }
 
-// ── File filter: (dùng cho video upload) ────────────
+// ── File filter: video + watermark ────────────────────────────────────────
 const videoFilter = (req, file, cb) => {
   if (file.fieldname === 'watermark') {
     const allowed = /jpeg|jpg|png|webp/
@@ -36,35 +36,34 @@ const videoFilter = (req, file, cb) => {
   cb(new Error('Video không hỗ trợ. Chỉ chấp nhận: MP4, MOV, AVI, MKV, WEBM, FLV, WMV'))
 }
 
-// ── Multer instance cho ảnh ─────────────────────────────────────────────────
+// ── Multer: ảnh (20 ảnh + 1 watermark) ────────────────────────────────────
 const uploadImage = multer({
   storage,
   fileFilter: imageFilter,
   limits: {
-    fileSize: parseInt(process.env.MAX_FILE_SIZE  || 50)   * 1024 * 1024, // default 50 MB
-    files: 21, // 20 ảnh + 1 watermark
+    fileSize: parseInt(process.env.MAX_FILE_SIZE  || 50)   * 1024 * 1024,
+    files: 21,
   },
 })
 
-// ── Multer instance cho video ───────────────────────────────────────────────
+// ── Multer: video (10 video + 1 watermark) ─────────────────────────────
 const uploadVideo = multer({
   storage,
   fileFilter: videoFilter,
   limits: {
-    fileSize: parseInt(process.env.MAX_VIDEO_SIZE || 2048) * 1024 * 1024, // default 2 GB
-    files: 2, // 1 video + 1 watermark
+    fileSize: parseInt(process.env.MAX_VIDEO_SIZE || 2048) * 1024 * 1024,
+    files: 11, rk
   },
 })
 
-// ── Middleware sẵn dùng ─────────────────────────────────────────────────────
-const uploadFields      = uploadImage.fields([
+const uploadFields = uploadImage.fields([
   { name: 'images',    maxCount: 20 },
   { name: 'watermark', maxCount: 1  },
 ])
 
 const uploadVideoFields = uploadVideo.fields([
-  { name: 'video',     maxCount: 1 },
-  { name: 'watermark', maxCount: 1 },
+  { name: 'video',     maxCount: 10 }, 
+  { name: 'watermark', maxCount: 1  },
 ])
 
 module.exports = { uploadFields, uploadVideoFields }
