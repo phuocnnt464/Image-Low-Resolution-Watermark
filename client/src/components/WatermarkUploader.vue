@@ -534,7 +534,6 @@ onUnmounted(() => stopRafLoop())
 .wm-drop__preview   { max-height: 52px; max-width: 100px; object-fit: contain; margin-bottom: 4px; }
 .wm-drop__name      { font-size: 11px; color: #64748b; margin: 0; }
 
-/* Nút "Dùng logo mặc định" */
 .wm-clear {
   margin-top: 6px;
   width: 100%;
@@ -669,7 +668,7 @@ onUnmounted(() => stopRafLoop())
 }
 .vc-canvas {
   max-height: 480px;
-  margin: 5px auto;
+  margin: 12px auto 5px;
   border-radius: 5px;
   display: block;
   object-fit: contain;
