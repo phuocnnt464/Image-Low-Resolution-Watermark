@@ -7,7 +7,8 @@ require('dotenv').config()
 const UPLOAD_DIR        = process.env.UPLOAD_DIR     || path.resolve(__dirname, '../../public/uploads')
 const DEFAULT_WATERMARK = process.env.WATERMARK_PATH || path.resolve(__dirname, '../../assets/watermark.png')
 
-const VALID_PRESETS = ['Original', '4K', 'QHD', 'FHD', 'HD', 'SD', 'LD', 'Tiny']
+const VALID_PRESETS    = ['Original', '4K', 'QHD', 'FHD', 'HD', 'SD', 'LD', 'Tiny']
+const VALID_BIT_DEPTHS = ['8bit', '12bit', '24bit', '32bit', '64bit']   // ← thêm mới
 
 const cleanupFiles = (paths) => {
   paths.forEach((p) => {
@@ -28,15 +29,19 @@ const processImages = async (req, res) => {
   const resolutionPreset  = VALID_PRESETS.includes(rawPreset) ? rawPreset : 'FHD'
   const watermarkPosition = req.body.watermarkPosition || 'bottom-left'
 
+  // ── Bit depth (mới) ────────────────────────────────────────────────────────
+  const rawBitDepth = req.body.bitDepth || '8bit'
+  const bitDepth    = VALID_BIT_DEPTHS.includes(rawBitDepth) ? rawBitDepth : '8bit'
+
   const inputPaths = imageFiles.map(f => f.path)
   const wmPaths    = watermarkFiles.map(f => f.path)
 
   const hasCustomWatermark = watermarkFiles.length > 0
   const watermarkPath = hasCustomWatermark ? watermarkFiles[0].path : DEFAULT_WATERMARK
 
-  console.log(`[image] preset=${resolutionPreset} | position=${watermarkPosition} | count=${imageFiles.length} | watermark=${hasCustomWatermark ? 'custom' : 'default'}`)
+  console.log(`[image] preset=${resolutionPreset} | bitDepth=${bitDepth} | position=${watermarkPosition} | count=${imageFiles.length}`)
 
-  const processedPaths = [] // { outputPath, downloadName }
+  const processedPaths = []
 
   try {
     for (const file of imageFiles) {
@@ -46,10 +51,11 @@ const processImages = async (req, res) => {
       const outputPath = path.join(UPLOAD_DIR, outputName)
 
       try {
-        await processImage(file.path, outputPath, resolutionPreset, watermarkPath, watermarkPosition)
+        // ← truyền thêm bitDepth
+        await processImage(file.path, outputPath, resolutionPreset, watermarkPath, watermarkPosition, bitDepth)
         processedPaths.push({
           outputPath,
-          downloadName: `watermarked-${baseName}${ext}`,  // tên gốc khi tải về
+          downloadName: `watermarked-${baseName}${ext}`,
         })
       } catch (imgErr) {
         console.error(`Lỗi xử lý ${file.originalname}:`, imgErr.message)
@@ -64,7 +70,7 @@ const processImages = async (req, res) => {
 
     if (processedPaths.length === 1) {
       const { outputPath, downloadName } = processedPaths[0]
-      res.download(outputPath, downloadName, (err) => {    // ✅ tên gốc khi tải về
+      res.download(outputPath, downloadName, (err) => {
         cleanupFiles([...inputPaths, ...wmPaths, outputPath])
         if (err) console.error('Image download error:', err)
       })
@@ -73,7 +79,7 @@ const processImages = async (req, res) => {
       await createZip(
         processedPaths.map(p => p.outputPath),
         zipPath,
-        processedPaths.map(p => p.downloadName),  // ✅ tên trong ZIP = tên gốc
+        processedPaths.map(p => p.downloadName),
       )
       res.download(zipPath, 'watermarked-images.zip', (err) => {
         cleanupFiles([...inputPaths, ...wmPaths, ...processedPaths.map(p => p.outputPath), zipPath])

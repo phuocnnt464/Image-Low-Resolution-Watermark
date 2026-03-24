@@ -9,16 +9,6 @@ const DEFAULT_WATERMARK_PATH = process.env.WATERMARK_PATH
 const WATERMARK_RATIO = 0.20;
 const PADDING         = 15;
 
-/**
- *   targetWidth : resize ảnh về đúng width này (withoutEnlargement: true)
- *                 null = giữ nguyên kích thước gốc (Original)
- *   jpegQuality : quality JPEG/WebP output — giữ 100 để không mất thêm, hoặc giảm nhẹ
- *
- * Output CÓ kích thước nhỏ hơn thật sự
- * → file nhỏ hơn, resolution thấp hơn, rõ ràng khi xem thuộc tính ảnh.
- *
- * Nếu ảnh gốc nhỏ hơn targetWidth → withoutEnlargement giữ nguyên kích thước gốc.
- */
 const RESOLUTION_PRESETS = {
   'Original': { targetWidth: null,  jpegQuality: 100, webpQuality: 100, pngCompression: 1 },
   '4K':       { targetWidth: 3840,  jpegQuality: 100, webpQuality: 100, pngCompression: 1 },
@@ -29,6 +19,29 @@ const RESOLUTION_PRESETS = {
   'LD':       { targetWidth: 480,   jpegQuality: 100, webpQuality: 100, pngCompression: 6 },
   'Tiny':     { targetWidth: 240,   jpegQuality: 100, webpQuality: 100, pngCompression: 7 },
 }
+
+/**
+ * Bit depth → số levels posterize cho sharp
+ * sharp.posterise(levels) giảm số giá trị màu mỗi kênh
+ *   8-bit  = 256 levels → giữ nguyên (không posterize)
+ *  12-bit  = 16 levels  (2^12 / 256 = 16)  → giảm nhẹ
+ *  24-bit  = posterize(64) → dùng làm "giả 24-bit per channel"
+ *   ⚠️  NOTE: "24-bit" thực ra là 8-bit/channel × 3 kênh (RGB) = tiêu chuẩn
+ *             Ở đây ta dùng posterize để tạo hiệu ứng "giảm màu" có chủ ý
+ *  32-bit  = posterize(8)
+ *  64-bit  = posterize(4)  (hiệu ứng rõ nhất)
+ */
+const BIT_DEPTH_LEVELS = {
+  '8bit':  null,  // giữ nguyên, không posterize
+  '12bit': 16,
+  '24bit': null,  // 24-bit = chuẩn (8bit/channel × 3), giữ nguyên
+  '32bit': 8,
+  '64bit': 4,
+}
+
+// ── 16-bit PNG: sharp hỗ trợ toPixels16() qua .toColourspace('rgb16') ──────
+// Chỉ có PNG mới có thể lưu 16-bit thực sự
+const NATIVE_16BIT_FORMATS = new Set(['png'])
 
 const calcPosition = (position, origW, origH, wmW, wmH, padding) => {
   const cx = Math.round((origW - wmW) / 2)
@@ -54,13 +67,15 @@ const calcPosition = (position, origW, origH, wmW, wmH, padding) => {
  * @param {string} resolutionPreset  - 'Original'|'4K'|'QHD'|'FHD'|'HD'|'SD'|'LD'|'Tiny'
  * @param {string|null} watermarkPath
  * @param {string} watermarkPosition
+ * @param {string} bitDepth          - '8bit'|'12bit'|'24bit'|'32bit'|'64bit'  (default: '8bit')
  */
 const processImage = async (
   inputPath,
   outputPath,
   resolutionPreset  = 'FHD',
   watermarkPath     = null,
-  watermarkPosition = 'bottom-left'
+  watermarkPosition = 'bottom-left',
+  bitDepth          = '8bit'           // ← tham số mới
 ) => {
   const wmPath = watermarkPath || DEFAULT_WATERMARK_PATH;
 
@@ -72,25 +87,38 @@ const processImage = async (
   const preset = RESOLUTION_PRESETS[resolutionPreset] ?? RESOLUTION_PRESETS['FHD'];
   const { targetWidth, jpegQuality, webpQuality, pngCompression } = preset;
 
-  // ── Bước 1: Resize xuống targetWidth (giữ tỉ lệ, không phóng to) ──────────
+  // ── Bước 1: Resize ──────────────────────────────────────────────────────────
   let pipeline = sharp(inputPath);
 
   if (targetWidth !== null) {
     pipeline = pipeline.resize({
       width: targetWidth,
-      withoutEnlargement: true,   // nếu ảnh gốc nhỏ hơn targetWidth → giữ nguyên
+      withoutEnlargement: true,
       kernel: sharp.kernel.lanczos3,
     });
   }
-  // targetWidth === null (Original) → không resize, giữ kích thước gốc
 
-  // ── Bước 2: Lấy metadata sau resize để tính vị trí watermark ──────────────
-  // Cần biết kích thước thực tế sau resize để đặt watermark đúng chỗ
+  // ── Bước 2: Bit depth xử lý ─────────────────────────────────────────────────
+  const posterizeLevels = BIT_DEPTH_LEVELS[bitDepth] ?? null
+
+  // '12bit' với PNG → dùng colourspace rgb16 (16-bit native thật sự)
+  const use16bitPng = (bitDepth === '12bit') && NATIVE_16BIT_FORMATS.has(format)
+
+  if (use16bitPng) {
+    // PNG 16-bit per channel thật (≈ 12-bit RAW quality)
+    pipeline = pipeline.toColourspace('rgb16')
+  } else if (posterizeLevels !== null) {
+    // Posterize: giảm dải màu xuống N levels (hiệu ứng giảm bit depth)
+    pipeline = pipeline.normalise().posterise(posterizeLevels)
+  }
+  // null = 8-bit / 24-bit → không làm gì, giữ nguyên
+
+  // ── Bước 3: Buffer sau resize + bit depth ───────────────────────────────────
   const resizedBuffer = await pipeline.toBuffer({ resolveWithObject: true });
   const resW = resizedBuffer.info.width;
   const resH = resizedBuffer.info.height;
 
-  // ── Bước 3: Watermark (scale theo kích thước sau resize) ───────────────────
+  // ── Bước 4: Watermark ───────────────────────────────────────────────────────
   let compositeOptions = [];
 
   if (fs.existsSync(wmPath)) {
@@ -110,15 +138,15 @@ const processImage = async (
     console.warn(`Watermark không tìm thấy: ${wmPath}`);
   }
 
-  // ── Bước 4: Composite + encode output với quality 100% ─────────────────────
+  // ── Bước 5: Composite + encode output ───────────────────────────────────────
   let outputPipeline = sharp(resizedBuffer.data)
     .composite(compositeOptions)
-    .withMetadata();   
+    .withMetadata();
 
   switch (format) {
     case 'jpeg':
       outputPipeline = outputPipeline.jpeg({
-        quality: jpegQuality,      
+        quality: jpegQuality,
         progressive: true,
         mozjpeg: true,
       });
@@ -127,14 +155,14 @@ const processImage = async (
     case 'png':
       outputPipeline = outputPipeline.png({
         compressionLevel: pngCompression,
-        // Không dùng palette — giữ full bit depth (không giảm màu)
         palette: false,
+        // 16-bit PNG: sharp sẽ tự giữ colourspace rgb16 khi encode
       });
       break;
 
     case 'webp':
       outputPipeline = outputPipeline.webp({
-        quality: webpQuality,       // 100 = lossless-like
+        quality: webpQuality,
         lossless: jpegQuality === 100,
       });
       break;
@@ -150,9 +178,9 @@ const processImage = async (
   const info = await outputPipeline.toFile(outputPath);
 
   console.log(
-    `[processImage] preset=${resolutionPreset} | ` +
+    `[processImage] preset=${resolutionPreset} | bitDepth=${bitDepth} | ` +
     `${origW}×${origH} → ${info.width}×${info.height} | ` +
-    `quality=${jpegQuality} | output=${(info.size / 1024).toFixed(1)} KB`
+    `output=${(info.size / 1024).toFixed(1)} KB`
   );
 
   return {
@@ -162,6 +190,7 @@ const processImage = async (
     processedHeight: info.height,
     processedSize:   info.size,
     resolutionPreset,
+    bitDepth,
   };
 };
 
