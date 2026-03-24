@@ -8,6 +8,7 @@ export const useVideoStore = defineStore('video', () => {
   const isProcessing      = ref(false)
   const errorMessage      = ref('')
   const bitratePreset     = ref('720p')
+  const videoBitrate      = ref('auto')    // ← thêm mới
   const watermarkFile     = ref(null)
   const watermarkUrl      = ref('')
   const watermarkPosition = ref('bottom-left')
@@ -45,14 +46,15 @@ export const useVideoStore = defineStore('video', () => {
 
     try {
       const formData = new FormData()
-      formData.append('video', selectedFile.value)
-      formData.append('bitratePreset', bitratePreset.value)
+      formData.append('video',             selectedFile.value)
+      formData.append('bitratePreset',     bitratePreset.value)
+      formData.append('videoBitrate',      videoBitrate.value)   // ← thêm mới
       formData.append('watermarkPosition', watermarkPosition.value)
       if (watermarkFile.value) formData.append('watermark', watermarkFile.value)
 
       const response = await axios.post('/api/videos/process', formData, {
         responseType: 'blob',
-        timeout: 30 * 60 * 1000, // 30 phút cho video lớn
+        timeout: 30 * 60 * 1000,
       })
 
       const disposition = response.headers['content-disposition']
@@ -89,7 +91,8 @@ export const useVideoStore = defineStore('video', () => {
 
   return {
     selectedFile, previewUrl, isProcessing, errorMessage,
-    bitratePreset, watermarkFile, watermarkUrl, watermarkPosition,
+    bitratePreset, videoBitrate,             // ← export thêm videoBitrate
+    watermarkFile, watermarkUrl, watermarkPosition,
     setVideo, clearVideo, setWatermark, clearWatermark,
     processAndDownload,
   }

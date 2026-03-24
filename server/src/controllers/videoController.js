@@ -1,7 +1,7 @@
 const path   = require('path')
 const fs     = require('fs')
-const { processVideo } = require('../services/videoService')
-const { createZip }    = require('../utils/zipHelper')
+const { processVideo, BITRATE_OPTIONS } = require('../services/videoService')
+const { createZip }                     = require('../utils/zipHelper')
 require('dotenv').config()
 
 const UPLOAD_DIR        = process.env.UPLOAD_DIR     || path.resolve(__dirname, '../../public/uploads')
@@ -11,7 +11,7 @@ const VALID_PRESETS = ['Original', '4K', '1080p', '720p', '480p', '360p', '240p'
 
 const cleanupFiles = (paths) => {
   paths.forEach((p) => {
-    try { if (p && fs.existsSync(p)) fs.unlinkSync(p); } catch {}
+    try { if (p && fs.existsSync(p)) fs.unlinkSync(p) } catch {}
   })
 }
 
@@ -28,18 +28,25 @@ const processVideoHandler = async (req, res) => {
   const bitratePreset     = VALID_PRESETS.includes(rawPreset) ? rawPreset : '720p'
   const watermarkPosition = req.body.watermarkPosition || 'bottom-left'
 
+  // Validate videoBitrate theo preset
+  const rawBitrate      = req.body.videoBitrate || 'auto'
+  const allowedBitrates = BITRATE_OPTIONS[bitratePreset] ?? ['auto']
+  const videoBitrate    = allowedBitrates.includes(rawBitrate) ? rawBitrate : 'auto'
+
   const hasCustomWatermark = watermarkFiles.length > 0
   const watermarkPath      = hasCustomWatermark ? watermarkFiles[0].path : DEFAULT_WATERMARK
 
   const inputPaths     = videoFiles.map(f => f.path)
   const wmPaths        = hasCustomWatermark ? [watermarkFiles[0].path] : []
-  const processedPaths = [] // { outputPath, downloadName }
+  const processedPaths = []
 
-  console.log(`[video] preset=${bitratePreset} | position=${watermarkPosition} | count=${videoFiles.length}`)
+  console.log(
+    `[video] preset=${bitratePreset} | videoBitrate=${videoBitrate} | ` +
+    `position=${watermarkPosition} | count=${videoFiles.length}`
+  )
 
   try {
     for (const file of videoFiles) {
-      // Tên output: watermarked-<tên gốc không ext>.mp4  (dễ hiểu, dễ nhận biết)
       const baseName   = path.parse(file.originalname).name
       const outputName = `watermarked-${baseName}-${Date.now()}.mp4`
       const outputPath = path.join(UPLOAD_DIR, outputName)
@@ -50,16 +57,15 @@ const processVideoHandler = async (req, res) => {
           outputPath,
           bitratePreset,
           watermarkPath,
-          watermarkPosition
+          watermarkPosition,
+          videoBitrate,        // ← truyền thêm tham số mới
         )
-        // downloadName: tên file khi user tải về (không có timestamp)
         processedPaths.push({
           outputPath,
           downloadName: `watermarked-${baseName}.mp4`,
         })
       } catch (vidErr) {
         console.error(`Lỗi xử lý ${file.originalname}:`, vidErr.message)
-        // tiếp tục xử lý video tiếp theo, không dừng
         try { if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath) } catch {}
       }
     }
@@ -70,19 +76,17 @@ const processVideoHandler = async (req, res) => {
     }
 
     if (processedPaths.length === 1) {
-      // 1 video → tải thẳng với tên gốc dễ hiểu
       const { outputPath, downloadName } = processedPaths[0]
       res.download(outputPath, downloadName, (err) => {
         cleanupFiles([...inputPaths, ...wmPaths, outputPath])
         if (err) console.error('Video download error:', err)
       })
     } else {
-      // Nhiều video → đóng ZIP, tên file trong ZIP = downloadName gốc
       const zipPath = path.join(UPLOAD_DIR, `watermarked-videos-${Date.now()}.zip`)
       await createZip(
         processedPaths.map(p => p.outputPath),
         zipPath,
-        processedPaths.map(p => p.downloadName),  // ✅ tên trong ZIP = tên gốc
+        processedPaths.map(p => p.downloadName),
       )
       res.download(zipPath, 'watermarked-videos.zip', (err) => {
         cleanupFiles([...inputPaths, ...wmPaths, ...processedPaths.map(p => p.outputPath), zipPath])

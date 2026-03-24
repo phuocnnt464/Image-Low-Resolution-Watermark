@@ -43,10 +43,10 @@
         <span class="vp-filesize">({{ formatSize(store.selectedFile.size) }})</span>
       </p>
 
-      <!-- Bitrate preset -->
+      <!-- ── Bước 1: Chọn Preset Resolution ── -->
       <div class="resolution-control">
         <div class="resolution-control__header">
-          <span class="resolution-control__title">📡 Preset Bitrate</span>
+          <span class="resolution-control__title"> Preset Optional</span>
           <span class="resolution-control__selected">
             {{ selectedPreset.label }}
             <em>— {{ selectedPreset.desc }}</em>
@@ -54,7 +54,7 @@
         </div>
         <div class="resolution-grid">
           <button
-            v-for="preset in bitratePresets"
+            v-for="preset in resolutionPresets"
             :key="preset.value"
             class="res-btn"
             :class="{
@@ -62,10 +62,33 @@
               [`res-btn--tier-${preset.tier}`]: true,
             }"
             :title="preset.desc"
-            @click="store.bitratePreset = preset.value"
+            @click="onSelectPreset(preset.value)"
           >
-            <span class="res-btn__name">{{ preset.value }}</span>
+            <span class="res-btn__name">{{ preset.label }}</span>
             <span class="res-btn__sub">{{ preset.sub }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── Bước 2: Chọn Bitrate cho preset đang chọn ── -->
+      <div v-if="currentBitrateOptions.length > 1" class="bitrate-control">
+        <div class="bitrate-control__header">
+          <span class="bitrate-control__title">📡 Video Bitrate</span>
+          <span class="bitrate-control__hint">
+            Cao hơn = sắc nét hơn, file lớn hơn
+          </span>
+        </div>
+        <div class="bitrate-grid">
+          <button
+            v-for="opt in currentBitrateOptions"
+            :key="opt.value"
+            class="br-btn"
+            :class="{ 'br-btn--active': store.videoBitrate === opt.value }"
+            :title="opt.hint"
+            @click="store.videoBitrate = opt.value"
+          >
+            <span class="br-btn__label">{{ opt.label }}</span>
+            <span class="br-btn__hint">{{ opt.hint }}</span>
           </button>
         </div>
       </div>
@@ -75,7 +98,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useVideoStore } from '../stores/videoStore'
 
 const store      = useVideoStore()
@@ -85,20 +108,76 @@ const isDragging = ref(false)
 
 defineExpose({ videoRef })
 
-const bitratePresets = [
-  { value: 'Original', label: 'Gốc (Original)', sub: 'Giữ nguyên', desc: 'Không nén, giữ nguyên bitrate gốc',     tier: 'high' },
-  { value: '4K',       label: '4K',             sub: '20 Mbps',    desc: '4K Ultra HD — chất lượng rất cao',       tier: 'high' },
-  { value: '1080p',    label: '1080p',           sub: '8 Mbps',     desc: 'Full HD — tiêu chuẩn YouTube/streaming', tier: 'high' },
-  { value: '720p',     label: '720p',            sub: '4 Mbps',     desc: 'HD — phổ biến, file vừa phải',           tier: 'mid'  },
-  { value: '480p',     label: '480p',            sub: '2 Mbps',     desc: 'SD — nhẹ hơn, phù hợp mobile',          tier: 'mid'  },
-  { value: '360p',     label: '360p',            sub: '1 Mbps',     desc: 'Low — rất nhẹ, chất lượng thấp',        tier: 'low'  },
-  { value: '240p',     label: '240p',            sub: '500 Kbps',   desc: 'Very Low — tối thiểu, mạng chậm',       tier: 'low'  },
+// ── Danh sách preset resolution ───────────────────────────────────────────────
+const resolutionPresets = [
+  { value: 'Original', label: 'Original', sub: 'Giữ nguyên', desc: 'Không đổi resolution, giữ nguyên',          tier: 'high' },
+  { value: '4K',       label: '4K',       sub: '3840px',     desc: '4K Ultra HD — rất sắc nét',                 tier: 'high' },
+  { value: '1080p',    label: '1080p',    sub: '1920px',     desc: 'Full HD — tiêu chuẩn YouTube/streaming',    tier: 'high' },
+  { value: '720p',     label: '720p',     sub: '1280px',     desc: 'HD — phổ biến, file vừa phải',              tier: 'mid'  },
+  { value: '480p',     label: '480p',     sub: '854px',      desc: 'SD — nhẹ hơn, phù hợp mobile',             tier: 'mid'  },
+  { value: '360p',     label: '360p',     sub: '640px',      desc: 'Low — rất nhẹ, chất lượng thấp',           tier: 'low'  },
+  { value: '240p',     label: '240p',     sub: '426px',      desc: 'Very Low — tối thiểu, mạng chậm',          tier: 'low'  },
 ]
 
-const selectedPreset = computed(
-  () => bitratePresets.find(p => p.value === store.bitratePreset) ?? bitratePresets[3]
+// ── Bảng bitrate theo preset (phải khớp với BITRATE_OPTIONS ở server) ─────────
+const BITRATE_OPTIONS = {
+  'Original': [
+    { value: 'auto',    label: 'Auto',    hint: 'Giữ nguyên bitrate gốc' },
+  ],
+  '4K': [
+    { value: 'auto',    label: 'Auto',    hint: 'CRF 18 — chất lượng cao nhất' },
+    { value: '40000k',  label: '40 Mbps', hint: 'Rất cao — master / archive' },
+    { value: '20000k',  label: '20 Mbps', hint: 'Cao — streaming 4K chuẩn' },
+    { value: '10000k',  label: '10 Mbps', hint: 'Vừa — 4K nén nhẹ' },
+  ],
+  '1080p': [
+    { value: 'auto',    label: 'Auto',    hint: 'CRF 20 — chất lượng tốt' },
+    { value: '12000k',  label: '12 Mbps', hint: 'Rất cao — phim / chụp màn hình' },
+    { value: '8000k',   label: '8 Mbps',  hint: 'Cao — tiêu chuẩn YouTube 1080p' },
+    { value: '4000k',   label: '4 Mbps',  hint: 'Vừa — streaming tiết kiệm' },
+  ],
+  '720p': [
+    { value: 'auto',    label: 'Auto',    hint: 'CRF 22 — mặc định cân bằng' },
+    { value: '6000k',   label: '6 Mbps',  hint: 'Cao — YouTube 720p60' },
+    { value: '4000k',   label: '4 Mbps',  hint: 'Chuẩn — YouTube 720p30' },
+    { value: '2000k',   label: '2 Mbps',  hint: 'Nhẹ — stream / upload nhanh' },
+  ],
+  '480p': [
+    { value: 'auto',    label: 'Auto',    hint: 'CRF 24' },
+    { value: '3000k',   label: '3 Mbps',  hint: 'Cao — 480p sắc nét' },
+    { value: '2000k',   label: '2 Mbps',  hint: 'Chuẩn — phổ biến' },
+    { value: '1000k',   label: '1 Mbps',  hint: 'Nhẹ — mobile / mạng yếu' },
+  ],
+  '360p': [
+    { value: 'auto',    label: 'Auto',    hint: 'CRF 26' },
+    { value: '1500k',   label: '1.5 Mbps',hint: 'Cao' },
+    { value: '1000k',   label: '1 Mbps',  hint: 'Chuẩn' },
+    { value: '600k',    label: '600 Kbps',hint: 'Nhẹ' },
+  ],
+  '240p': [
+    { value: 'auto',    label: 'Auto',    hint: 'CRF 28' },
+    { value: '700k',    label: '700 Kbps',hint: 'Cao' },
+    { value: '500k',    label: '500 Kbps',hint: 'Chuẩn' },
+    { value: '300k',    label: '300 Kbps',hint: 'Nhẹ nhất' },
+  ],
+}
+
+// Danh sách bitrate của preset đang chọn
+const currentBitrateOptions = computed(
+  () => BITRATE_OPTIONS[store.bitratePreset] ?? BITRATE_OPTIONS['720p']
 )
 
+const selectedPreset = computed(
+  () => resolutionPresets.find(p => p.value === store.bitratePreset) ?? resolutionPresets[3]
+)
+
+// Khi đổi preset → reset về 'auto' để tránh gửi bitrate không hợp lệ
+function onSelectPreset(value) {
+  store.bitratePreset = value
+  store.videoBitrate  = 'auto'
+}
+
+// ── Các hàm tiện ích ──────────────────────────────────────────────────────────
 const formatSize = (bytes) => {
   if (!bytes) return '—'
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
@@ -165,6 +244,7 @@ const onDrop = (e) => {
 .vp-filename { font-size: 13px; color: #475569; }
 .vp-filesize { color: #94a3b8; }
 
+/* ── Resolution preset ── */
 .resolution-control {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -203,4 +283,49 @@ const onDrop = (e) => {
 .res-btn--tier-high .res-btn__sub { color: #86efac; }
 .res-btn--tier-mid  .res-btn__sub { color: #93c5fd; }
 .res-btn--tier-low  .res-btn__sub { color: #fdba74; }
+
+/* ── Bitrate selector ── */
+.bitrate-control {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.bitrate-control__header {
+  display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;
+}
+.bitrate-control__title { font-size: 13px; font-weight: 600; color: #0369a1; white-space: nowrap; }
+.bitrate-control__hint  { font-size: 11px; color: #64748b; }
+
+.bitrate-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+@media (max-width: 480px) { .bitrate-grid { grid-template-columns: repeat(2, 1fr); } }
+
+.br-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 8px 6px; border-radius: 7px; border: 1.5px solid #e0f2fe;
+  background: white; cursor: pointer; transition: all 0.15s; gap: 3px; line-height: 1.3;
+  text-align: center;
+}
+.br-btn:hover { border-color: #38bdf8; background: #e0f2fe; }
+
+.br-btn__label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0369a1;
+}
+.br-btn__hint {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.br-btn--active {
+  border-color: #0284c7;
+  background: #0284c7;
+}
+.br-btn--active .br-btn__label { color: white; }
+.br-btn--active .br-btn__hint  { color: #bae6fd; }
 </style>

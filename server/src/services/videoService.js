@@ -11,17 +11,34 @@ ffmpeg.setFfprobePath(ffprobePath)
 const DEFAULT_WATERMARK = process.env.WATERMARK_PATH
   || path.resolve(__dirname, '../../assets/watermark.png')
 
+/**
+ * scale   : giới hạn chiều rộng tối đa (null = giữ nguyên)
+ * crf     : dùng khi videoBitrate = 'auto' — chất lượng cố định
+ * Khi videoBitrate là chuỗi số (vd '8000k') → dùng -b:v thay CRF
+ */
 const PRESETS = {
-  'Original': { crf: 18, scale: null  },  
-  '4K':       { crf: 18, scale: 3840  },
-  '1080p':    { crf: 20, scale: 1920  },
-  '720p':     { crf: 22, scale: 1280  },
-  '480p':     { crf: 24, scale: 854   },
-  '360p':     { crf: 26, scale: 640   },
-  '240p':     { crf: 28, scale: 426   },
+  'Original': { crf: 18, scale: null },
+  '4K':       { crf: 18, scale: 3840 },
+  '1080p':    { crf: 20, scale: 1920 },
+  '720p':     { crf: 22, scale: 1280 },
+  '480p':     { crf: 24, scale: 854  },
+  '360p':     { crf: 26, scale: 640  },
+  '240p':     { crf: 28, scale: 426  },
 }
 
-// Audio bitrate theo preset (thấp hơn = nhỏ hơn, đủ nghe)
+// Các mức bitrate video có thể chọn theo từng preset (Kbps)
+// 'auto' = dùng CRF (không set -b:v)
+const BITRATE_OPTIONS = {
+  'Original': ['auto'],
+  '4K':       ['auto', '40000k', '20000k', '10000k'],
+  '1080p':    ['auto', '12000k', '8000k',  '4000k' ],
+  '720p':     ['auto', '6000k',  '4000k',  '2000k' ],
+  '480p':     ['auto', '3000k',  '2000k',  '1000k' ],
+  '360p':     ['auto', '1500k',  '1000k',  '600k'  ],
+  '240p':     ['auto', '700k',   '500k',   '300k'  ],
+}
+
+// Audio bitrate theo preset
 const AUDIO_BITRATE = {
   'Original': '192k',
   '4K':       '192k',
@@ -57,14 +74,33 @@ function getVideoSize(filePath) {
   })
 }
 
-const processVideo = async (inputPath, outputPath, preset = '720p', wmPath = null, wmPosition = 'bottom-left') => {
+/**
+ * @param {string} inputPath
+ * @param {string} outputPath
+ * @param {string} preset        - 'Original'|'4K'|'1080p'|'720p'|'480p'|'360p'|'240p'
+ * @param {string|null} wmPath
+ * @param {string} wmPosition
+ * @param {string} videoBitrate  - 'auto' | '40000k' | '8000k' | ... (phải nằm trong BITRATE_OPTIONS[preset])
+ */
+const processVideo = async (
+  inputPath,
+  outputPath,
+  preset        = '720p',
+  wmPath        = null,
+  wmPosition    = 'bottom-left',
+  videoBitrate  = 'auto',
+) => {
   return new Promise(async (resolve, reject) => {
     try {
-      const wm          = wmPath || DEFAULT_WATERMARK
-      const hasWm       = fs.existsSync(wm)
+      const wm           = wmPath || DEFAULT_WATERMARK
+      const hasWm        = fs.existsSync(wm)
       const { crf, scale } = PRESETS[preset] ?? PRESETS['720p']
       const audioBitrate = AUDIO_BITRATE[preset] ?? '128k'
-      const overlayExpr = OVERLAY_POSITIONS[wmPosition] || OVERLAY_POSITIONS['bottom-left']
+      const overlayExpr  = OVERLAY_POSITIONS[wmPosition] || OVERLAY_POSITIONS['bottom-left']
+
+      // Validate videoBitrate — chỉ cho phép các giá trị hợp lệ của preset đó
+      const allowedBitrates = BITRATE_OPTIONS[preset] ?? ['auto']
+      const finalBitrate    = allowedBitrates.includes(videoBitrate) ? videoBitrate : 'auto'
 
       let logoW = null
       if (hasWm) {
@@ -76,7 +112,7 @@ const processVideo = async (inputPath, outputPath, preset = '720p', wmPath = nul
       const cmd     = ffmpeg(inputPath)
       const filters = []
 
-      // Bước 1: Scale video
+      // Bước 1: Scale video (giữ tỉ lệ, không phóng to)
       if (scale !== null) {
         filters.push(`[0:v]scale=w=if(gt(iw\\,${scale})\\,${scale}\\,iw):h=-2[scaled]`)
       } else {
@@ -94,19 +130,37 @@ const processVideo = async (inputPath, outputPath, preset = '720p', wmPath = nul
 
       cmd.complexFilter(filters, 'out')
 
-      // Bước 3: Video codec — tối ưu tốc độ encode
-      cmd.outputOptions([
+      // Bước 3: Video codec
+      const videoOptions = [
         '-c:v libx264',
-        '-preset ultrafast',   
-        '-tune fastdecode',    
-        `-crf ${crf}`,        
+        '-preset ultrafast',
+        '-tune fastdecode',
         '-pix_fmt yuv420p',
         '-movflags +faststart',
-        '-threads 0',          
-      ])
+        '-threads 0',
+      ]
+
+      if (finalBitrate === 'auto') {
+        // Dùng CRF — chất lượng cố định, kích thước file phụ thuộc nội dung
+        videoOptions.push(`-crf ${crf}`)
+      } else {
+        // Dùng target bitrate — kích thước file có thể dự đoán được
+        // CBR-like: set -b:v và -maxrate/-bufsize để ổn định
+        videoOptions.push(`-b:v ${finalBitrate}`)
+        videoOptions.push(`-maxrate ${finalBitrate}`)
+        videoOptions.push(`-bufsize ${parseInt(finalBitrate) * 2}k`.replace('kk', 'k'))
+      }
+
+      cmd.outputOptions(videoOptions)
 
       // Bước 4: Audio
       cmd.outputOptions(['-map 0:a?', '-c:a aac', `-b:a ${audioBitrate}`])
+
+      console.log(
+        `[FFmpeg] preset=${preset} | bitrate=${finalBitrate} | ` +
+        `crf=${finalBitrate === 'auto' ? crf : 'n/a'} | ` +
+        `scale=${scale ?? 'original'} | audio=${audioBitrate}`
+      )
 
       cmd
         .output(outputPath)
@@ -114,7 +168,7 @@ const processVideo = async (inputPath, outputPath, preset = '720p', wmPath = nul
         .on('progress', p => p.percent && process.stdout.write(`\r[FFmpeg] ${p.percent.toFixed(1)}%`))
         .on('end', () => {
           console.log(`\n[FFmpeg] done → ${outputPath}`)
-          resolve({ processedSize: fs.statSync(outputPath).size, preset })
+          resolve({ processedSize: fs.statSync(outputPath).size, preset, videoBitrate: finalBitrate })
         })
         .on('error', err => {
           console.error('[FFmpeg] error:', err.message)
@@ -128,4 +182,4 @@ const processVideo = async (inputPath, outputPath, preset = '720p', wmPath = nul
   })
 }
 
-module.exports = { processVideo }
+module.exports = { processVideo, BITRATE_OPTIONS }
