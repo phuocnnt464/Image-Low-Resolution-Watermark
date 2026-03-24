@@ -8,15 +8,14 @@ const UPLOAD_DIR        = process.env.UPLOAD_DIR     || path.resolve(__dirname, 
 const DEFAULT_WATERMARK = process.env.WATERMARK_PATH || path.resolve(__dirname, '../../assets/watermark.png')
 
 const VALID_PRESETS    = ['Original', '4K', 'QHD', 'FHD', 'HD', 'SD', 'LD', 'Tiny']
-const VALID_BIT_DEPTHS = ['8bit', '12bit', '24bit', '32bit', '64bit']   // ← thêm mới
+const VALID_BIT_DEPTHS = ['8bit', '16bit', '24bit']   // ← giới hạn còn 3, bỏ TIFF
 
 const cleanupFiles = (paths) => {
   paths.forEach((p) => {
-    try { if (p && fs.existsSync(p)) fs.unlinkSync(p); } catch {}
+    try { if (p && fs.existsSync(p)) fs.unlinkSync(p) } catch {}
   })
 }
 
-// ─── POST /api/images/process ────────────────────────────────────────────────
 const processImages = async (req, res) => {
   const imageFiles     = req.files?.['images']    || []
   const watermarkFiles = req.files?.['watermark'] || []
@@ -25,19 +24,16 @@ const processImages = async (req, res) => {
     return res.status(400).json({ message: 'Không có ảnh nào được upload' })
   }
 
-  const rawPreset         = req.body.resolutionPreset || 'FHD'
-  const resolutionPreset  = VALID_PRESETS.includes(rawPreset) ? rawPreset : 'FHD'
+  const rawPreset        = req.body.resolutionPreset || 'FHD'
+  const resolutionPreset = VALID_PRESETS.includes(rawPreset) ? rawPreset : 'FHD'
   const watermarkPosition = req.body.watermarkPosition || 'bottom-left'
 
-  // ── Bit depth (mới) ────────────────────────────────────────────────────────
-  const rawBitDepth = req.body.bitDepth || '8bit'
-  const bitDepth    = VALID_BIT_DEPTHS.includes(rawBitDepth) ? rawBitDepth : '8bit'
+  const rawBitDepth = req.body.bitDepth || '24bit'
+  const bitDepth    = VALID_BIT_DEPTHS.includes(rawBitDepth) ? rawBitDepth : '24bit'
 
-  const inputPaths = imageFiles.map(f => f.path)
-  const wmPaths    = watermarkFiles.map(f => f.path)
-
-  const hasCustomWatermark = watermarkFiles.length > 0
-  const watermarkPath = hasCustomWatermark ? watermarkFiles[0].path : DEFAULT_WATERMARK
+  const inputPaths    = imageFiles.map(f => f.path)
+  const wmPaths       = watermarkFiles.map(f => f.path)
+  const watermarkPath = watermarkFiles.length > 0 ? watermarkFiles[0].path : DEFAULT_WATERMARK
 
   console.log(`[image] preset=${resolutionPreset} | bitDepth=${bitDepth} | position=${watermarkPosition} | count=${imageFiles.length}`)
 
@@ -51,11 +47,10 @@ const processImages = async (req, res) => {
       const outputPath = path.join(UPLOAD_DIR, outputName)
 
       try {
-        // ← truyền thêm bitDepth
         await processImage(file.path, outputPath, resolutionPreset, watermarkPath, watermarkPosition, bitDepth)
         processedPaths.push({
           outputPath,
-          downloadName: `watermarked-${baseName}${ext}`,
+          downloadName: `watermarked-${baseName}_${resolutionPreset}_${bitDepth}${ext}`,
         })
       } catch (imgErr) {
         console.error(`Lỗi xử lý ${file.originalname}:`, imgErr.message)

@@ -100,12 +100,29 @@ const presets = [
 ]
 
 // ── Bit depth options ─────────────────────────────────────────────────────────
+// Thay thế bitDepthOptions cũ bằng:
 const bitDepthOptions = [
-  { value: '8bit',  label: '8-bit',  sub: '256 levels',  color: 'std',  desc: 'Tiêu chuẩn — màu sắc thông thường (JPG/PNG/WebP)' },
-  { value: '12bit', label: '12-bit', sub: '4096 levels', color: 'high', desc: 'Cao — tương đương RAW camera; PNG xuất 16-bit thật' },
-  { value: '24bit', label: '24-bit', sub: 'Full RGB',    color: 'high', desc: 'Full color — 8-bit mỗi kênh RGB, chuẩn hiển thị' },
-  { value: '32bit', label: '32-bit', sub: 'Reduced',     color: 'low',  desc: 'Giảm dải màu — hiệu ứng posterize nhẹ' },
-  { value: '64bit', label: '64-bit', sub: 'Minimal',     color: 'xlow', desc: 'Dải màu tối thiểu — posterize mạnh, phong cách nghệ thuật' },
+  {
+    value: '8bit',
+    label: '8-bit',
+    sub: 'JPG q72',
+    color: 'low',
+    desc: 'Nén nhiều nhất — file nhỏ, thấy artifact, quality thấp',
+  },
+  {
+    value: '16bit',
+    label: '16-bit',
+    sub: 'PNG 16-bit',
+    color: 'high',
+    desc: 'PNG: 16-bit colourspace thật — dải màu rộng hơn, file lớn hơn',
+  },
+  {
+    value: '24bit',
+    label: '24-bit',
+    sub: 'JPG q95',
+    color: 'std',
+    desc: 'Chất lượng cao nhất — 8bit×3 kênh RGB, chuẩn màn hình',
+  },
 ]
 
 const selectedPreset   = computed(() => presets.find(p => p.value === store.resolutionPreset) ?? presets[3])
