@@ -73,7 +73,7 @@
       <!-- ── Bước 2: Chọn Bitrate cho preset đang chọn ── -->
       <div v-if="currentBitrateOptions.length > 1" class="bitrate-control">
         <div class="bitrate-control__header">
-          <span class="bitrate-control__title">📡 Video Bitrate</span>
+          <span class="bitrate-control__title"> Video Bitrate</span>
           <span class="bitrate-control__hint">
             Cao hơn = sắc nét hơn, file lớn hơn
           </span>
