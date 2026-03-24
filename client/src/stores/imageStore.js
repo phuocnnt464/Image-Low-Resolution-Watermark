@@ -1,14 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { processImages as apiProcessImages } from '../services/api'
+import { processImages as apiProcessImages, getHistory, deleteHistory } from '../services/api'
 
 export const useImageStore = defineStore('image', () => {
   const selectedFiles      = ref([])
   const previewUrls        = ref([])
   const isProcessing       = ref(false)
+  const history            = ref([])
   const errorMessage       = ref('')
-  const resolutionPreset   = ref('FHD')
-  const bitDepth           = ref('8bit')   // ← thêm mới
+  const resolutionPreset   = ref('FHD')   // ← thay scalePercent
 
   // ── Watermark state ──────────────────────────────────────────────────────
   const watermarkFile     = ref(null)
@@ -55,10 +55,9 @@ export const useImageStore = defineStore('image', () => {
     try {
       const response = await apiProcessImages(
         selectedFiles.value,
-        resolutionPreset.value,
+        resolutionPreset.value,     // ← truyền preset thay vì scalePercent
         watermarkFile.value,
-        watermarkPosition.value,
-        bitDepth.value           // ← truyền thêm
+        watermarkPosition.value
       )
 
       const disposition = response.headers['content-disposition']
@@ -78,6 +77,7 @@ export const useImageStore = defineStore('image', () => {
       link.click()
       URL.revokeObjectURL(url)
 
+      await fetchHistory()
       clearFiles()
     } catch (err) {
       let message = 'Lỗi xử lý ảnh, thử lại!'
@@ -96,13 +96,24 @@ export const useImageStore = defineStore('image', () => {
     }
   }
 
+  const fetchHistory = async () => {
+    try { history.value = await getHistory() }
+    catch (err) { console.error('Lỗi lấy lịch sử:', err) }
+  }
+
+  const removeHistory = async (id) => {
+    try {
+      await deleteHistory(id)
+      history.value = history.value.filter((item) => item.id !== id)
+    } catch (err) { console.error('Lỗi xóa:', err) }
+  }
+
   return {
-    selectedFiles, previewUrls, isProcessing, errorMessage,
-    resolutionPreset,
-    bitDepth,                    // ← export ra
+    selectedFiles, previewUrls, isProcessing, history, errorMessage,
+    resolutionPreset,                           
     watermarkFile, watermarkUrl, watermarkPosition,
     setWatermark, clearWatermark,
     addFiles, removeFile, clearFiles,
-    processAndDownload,
+    processAndDownload, fetchHistory, removeHistory,
   }
 })

@@ -43,28 +43,6 @@
           <span class="res-btn__sub">{{ preset.sub }}</span>
         </button>
       </div>
-
-      <!-- ── Bit Depth picker (xuất hiện dưới preset) ── -->
-      <div class="bitdepth-row">
-        <span class="bitdepth-label">🎨 Bit Depth:</span>
-        <div class="bitdepth-options">
-          <button
-            v-for="bd in bitDepthOptions"
-            :key="bd.value"
-            class="bd-btn"
-            :class="{
-              'bd-btn--active':    store.bitDepth === bd.value,
-              [`bd-btn--${bd.color}`]: true,
-            }"
-            :title="bd.desc"
-            @click="store.bitDepth = bd.value"
-          >
-            <span class="bd-btn__name">{{ bd.label }}</span>
-            <span class="bd-btn__sub">{{ bd.sub }}</span>
-          </button>
-        </div>
-        <span class="bitdepth-desc">{{ selectedBitDepth.desc }}</span>
-      </div>
     </div>
 
     <!-- Error message -->
@@ -99,34 +77,9 @@ const presets = [
   { value: 'Tiny',     label: 'Tiny (240px)',    sub: '240px',       desc: 'Cực thấp — pixel hoá rõ rệt',                tier: 'low'  },
 ]
 
-// ── Bit depth options ─────────────────────────────────────────────────────────
-// Thay thế bitDepthOptions cũ bằng:
-const bitDepthOptions = [
-  {
-    value: '8bit',
-    label: '8-bit',
-    sub: 'JPG q72',
-    color: 'low',
-    desc: 'Nén nhiều nhất — file nhỏ, thấy artifact, quality thấp',
-  },
-  {
-    value: '16bit',
-    label: '16-bit',
-    sub: 'PNG 16-bit',
-    color: 'high',
-    desc: 'PNG: 16-bit colourspace thật — dải màu rộng hơn, file lớn hơn',
-  },
-  {
-    value: '24bit',
-    label: '24-bit',
-    sub: 'JPG q95',
-    color: 'std',
-    desc: 'Chất lượng cao nhất — 8bit×3 kênh RGB, chuẩn màn hình',
-  },
-]
-
-const selectedPreset   = computed(() => presets.find(p => p.value === store.resolutionPreset) ?? presets[3])
-const selectedBitDepth = computed(() => bitDepthOptions.find(b => b.value === store.bitDepth) ?? bitDepthOptions[0])
+const selectedPreset = computed(
+  () => presets.find(p => p.value === store.resolutionPreset) ?? presets[3]
+)
 </script>
 
 <style scoped>
@@ -201,12 +154,14 @@ const selectedBitDepth = computed(() => bitDepthOptions.find(b => b.value === st
   margin-bottom: 12px;
   flex-wrap: wrap;
 }
+
 .resolution-control__title {
   font-size: 13px;
   font-weight: 600;
   color: #1e293b;
   white-space: nowrap;
 }
+
 .resolution-control__selected {
   font-size: 12px;
   color: #3b82f6;
@@ -223,6 +178,7 @@ const selectedBitDepth = computed(() => bitDepthOptions.find(b => b.value === st
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;
 }
+
 @media (max-width: 480px) {
   .resolution-grid { grid-template-columns: repeat(2, 1fr); }
 }
@@ -241,76 +197,47 @@ const selectedBitDepth = computed(() => bitDepthOptions.find(b => b.value === st
   gap: 2px;
   line-height: 1.2;
 }
-.res-btn:hover { border-color: #93c5fd; background: #eff6ff; }
-.res-btn__name { font-size: 13px; font-weight: 700; color: #1e293b; }
-.res-btn__sub  { font-size: 10px; color: #94a3b8; }
+.res-btn:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
 
-.res-btn--active.res-btn--tier-high { border-color: #22c55e; background: #f0fdf4; }
+.res-btn__name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+.res-btn__sub {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+/* Tier màu sắc cho border khi active */
+.res-btn--active.res-btn--tier-high {
+  border-color: #22c55e;
+  background: #f0fdf4;
+}
 .res-btn--active.res-btn--tier-high .res-btn__name { color: #16a34a; }
-.res-btn--active.res-btn--tier-mid  { border-color: #3b82f6; background: #eff6ff; }
-.res-btn--active.res-btn--tier-mid  .res-btn__name { color: #2563eb; }
-.res-btn--active.res-btn--tier-low  { border-color: #f97316; background: #fff7ed; }
-.res-btn--active.res-btn--tier-low  .res-btn__name { color: #ea580c; }
 
+.res-btn--active.res-btn--tier-mid {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+.res-btn--active.res-btn--tier-mid .res-btn__name { color: #2563eb; }
+
+.res-btn--active.res-btn--tier-low {
+  border-color: #f97316;
+  background: #fff7ed;
+}
+.res-btn--active.res-btn--tier-low .res-btn__name { color: #ea580c; }
+
+/* Màu sub text theo tier */
 .res-btn--tier-high .res-btn__sub { color: #86efac; }
 .res-btn--tier-mid  .res-btn__sub { color: #93c5fd; }
 .res-btn--tier-low  .res-btn__sub { color: #fdba74; }
 
-/* ── Bit Depth picker ── */
-.bitdepth-row {
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid #e2e8f0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.bitdepth-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #475569;
-}
-.bitdepth-options {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.bd-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 6px 10px;
-  border-radius: 7px;
-  border: 1.5px solid #e2e8f0;
-  background: white;
-  cursor: pointer;
-  transition: all 0.15s;
-  min-width: 64px;
-  gap: 1px;
-}
-.bd-btn:hover { border-color: #93c5fd; background: #eff6ff; }
-.bd-btn__name { font-size: 12px; font-weight: 700; color: #1e293b; }
-.bd-btn__sub  { font-size: 10px; color: #94a3b8; }
-
-/* Active states theo màu */
-.bd-btn--active.bd-btn--std  { border-color: #3b82f6; background: #eff6ff; }
-.bd-btn--active.bd-btn--std  .bd-btn__name { color: #2563eb; }
-.bd-btn--active.bd-btn--high { border-color: #22c55e; background: #f0fdf4; }
-.bd-btn--active.bd-btn--high .bd-btn__name { color: #16a34a; }
-.bd-btn--active.bd-btn--low  { border-color: #f97316; background: #fff7ed; }
-.bd-btn--active.bd-btn--low  .bd-btn__name { color: #ea580c; }
-.bd-btn--active.bd-btn--xlow { border-color: #ef4444; background: #fef2f2; }
-.bd-btn--active.bd-btn--xlow .bd-btn__name { color: #dc2626; }
-
-.bitdepth-desc {
-  font-size: 11px;
-  color: #64748b;
-  font-style: italic;
-  min-height: 16px;
-}
-
-/* ── Buttons ── */
 .error { color: #ef4444; font-size: 14px; margin-bottom: 12px; }
+
 .btn {
   display: inline-flex;
   align-items: center;
