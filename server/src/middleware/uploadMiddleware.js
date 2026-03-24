@@ -46,13 +46,13 @@ const uploadImage = multer({
   },
 })
 
-// ── Multer: video (10 video + 1 watermark) ─────────────────────────────
+// ── Multer: video (1 video + 1 watermark) ─────────────────────────────
 const uploadVideo = multer({
   storage,
   fileFilter: videoFilter,
   limits: {
     fileSize: parseInt(process.env.MAX_VIDEO_SIZE || 2048) * 1024 * 1024,
-    files: 11,
+    files: 2,
   },
 })
 
@@ -62,7 +62,7 @@ const uploadFields = uploadImage.fields([
 ])
 
 const uploadVideoFields = uploadVideo.fields([
-  { name: 'video',     maxCount: 10 }, 
+  { name: 'video',     maxCount: 1 }, 
   { name: 'watermark', maxCount: 1  },
 ])
 
