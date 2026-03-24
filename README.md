@@ -77,29 +77,10 @@ Mở `.env` và điền thông tin:
 PORT=3000
 NODE_ENV=development
 
-# PostgreSQL
-DB_USER=postgres
-DB_PASSWORD=your_password_here
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=image_watermark_db
-
 # Upload
 MAX_FILE_SIZE=50
 UPLOAD_DIR=./public/uploads
 WATERMARK_PATH=./assets/watermark.png
-```
-
-#### Tạo database PostgreSQL
-
-```bash
-psql -U postgres -c "CREATE DATABASE image_watermark_db;"
-```
-
-#### Tạo thư mục upload
-
-```bash
-mkdir -p public/uploads
 ```
 
 #### Chạy server
