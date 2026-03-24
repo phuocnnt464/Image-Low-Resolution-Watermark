@@ -52,7 +52,7 @@ const uploadVideo = multer({
   fileFilter: videoFilter,
   limits: {
     fileSize: parseInt(process.env.MAX_VIDEO_SIZE || 2048) * 1024 * 1024,
-    files: 11, rk
+    files: 11,
   },
 })
 
