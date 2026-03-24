@@ -13,7 +13,7 @@ const PADDING         = 15;
  *   targetWidth : resize ảnh về đúng width này (withoutEnlargement: true)
  *                 null = giữ nguyên kích thước gốc (Original)
  *   jpegQuality : quality JPEG/WebP output — giữ 100 để không mất thêm, hoặc giảm nhẹ
- *
+ * 
  * Output CÓ kích thước nhỏ hơn thật sự
  * → file nhỏ hơn, resolution thấp hơn, rõ ràng khi xem thuộc tính ảnh.
  *

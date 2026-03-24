@@ -51,7 +51,6 @@ import ImageUploader      from './components/ImageUploader.vue'
 import WatermarkUploader  from './components/WatermarkUploader.vue'
 import PreviewGrid        from './components/PreviewGrid.vue'
 import VideoUploader      from './components/VideoUploader.vue'
-import HistoryTable       from './components/HistoryTable.vue'
 
 const activeTab        = ref('image')
 const imageStore       = useImageStore()
