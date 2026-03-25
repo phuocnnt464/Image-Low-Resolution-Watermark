@@ -14,7 +14,7 @@ app.use(cors());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-app.use('/assets', express.static(path.resolve(__dirname, 'assets')));
+app.use('/assets', express.static(path.join(__dirname, 'assets')));
 
 // Routes
 app.use('/api/images', imageRoutes);
@@ -22,7 +22,7 @@ app.use('/api/videos', videoRoutes);
 
 app.get('/health', (req, res) => {
   const watermarkPath = process.env.WATERMARK_PATH
-    || path.resolve(__dirname, 'assets/watermark.png')
+    || path.join(__dirname, 'assets/watermark.png');
 
   res.json({
     status:    'ok',
@@ -31,7 +31,7 @@ app.get('/health', (req, res) => {
     checks: {
       server:    true,
       watermark: fs.existsSync(watermarkPath),
-      uploadDir: fs.existsSync(process.env.UPLOAD_DIR || path.resolve(__dirname, 'public/uploads')),
+      uploadDir: fs.existsSync(process.env.UPLOAD_DIR || path.join(__dirname, 'public/uploads')),
     },
   })
 })
