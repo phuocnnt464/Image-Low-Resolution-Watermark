@@ -6,7 +6,6 @@ export const useImageStore = defineStore('image', () => {
   const selectedFiles      = ref([])
   const previewUrls        = ref([])
   const isProcessing       = ref(false)
-  const history            = ref([])
   const errorMessage       = ref('')
   const resolutionPreset   = ref('FHD')   // ← thay scalePercent
 
@@ -96,7 +95,7 @@ export const useImageStore = defineStore('image', () => {
   }
 
   return {
-    selectedFiles, previewUrls, isProcessing, history, errorMessage,
+    selectedFiles, previewUrls, isProcessing, errorMessage,
     resolutionPreset,                           
     watermarkFile, watermarkUrl, watermarkPosition,
     setWatermark, clearWatermark,
