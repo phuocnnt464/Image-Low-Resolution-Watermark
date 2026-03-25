@@ -11,6 +11,8 @@ services:
     ports:
       - "3000:3000"
     restart: always
+    networks:
+      - app-network
 
   client:
     build:
@@ -19,3 +21,9 @@ services:
     ports: 
       - "80:5173"
     restart: always
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
