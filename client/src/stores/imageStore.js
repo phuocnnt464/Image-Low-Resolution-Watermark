@@ -77,7 +77,6 @@ export const useImageStore = defineStore('image', () => {
       link.click()
       URL.revokeObjectURL(url)
 
-      await fetchHistory()
       clearFiles()
     } catch (err) {
       let message = 'Lỗi xử lý ảnh, thử lại!'
@@ -96,24 +95,12 @@ export const useImageStore = defineStore('image', () => {
     }
   }
 
-  const fetchHistory = async () => {
-    try { history.value = await getHistory() }
-    catch (err) { console.error('Lỗi lấy lịch sử:', err) }
-  }
-
-  const removeHistory = async (id) => {
-    try {
-      await deleteHistory(id)
-      history.value = history.value.filter((item) => item.id !== id)
-    } catch (err) { console.error('Lỗi xóa:', err) }
-  }
-
   return {
     selectedFiles, previewUrls, isProcessing, history, errorMessage,
     resolutionPreset,                           
     watermarkFile, watermarkUrl, watermarkPosition,
     setWatermark, clearWatermark,
     addFiles, removeFile, clearFiles,
-    processAndDownload, fetchHistory, removeHistory,
+    processAndDownload
   }
 })
