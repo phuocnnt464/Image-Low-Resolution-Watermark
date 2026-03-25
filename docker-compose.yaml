@@ -7,7 +7,6 @@ services:
     container_name: server
     volumes:
       - ./server/public/uploads:/app/public/uploads
-      - ./server/assets:/app/assets  
     ports:
       - "3000:3000"
     restart: always
