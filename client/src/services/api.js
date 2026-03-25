@@ -21,7 +21,7 @@ const processImages = async (files, resolutionPreset = 'FHD', watermarkFile = nu
     formData.append('watermark', watermarkFile)
   }
 
-  const response = await apiClient.post('/images/process', formData, {
+  const response = await apiClient.postForm('/images/process', formData, {
     responseType: 'blob',
   })
 
