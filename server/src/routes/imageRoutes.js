@@ -3,6 +3,6 @@ const router  = express.Router()
 const { uploadFields }  = require('../middleware/uploadMiddleware')
 const { processImages } = require('../controllers/imageController')
 
-router.post('/process', uploadFields, processImages)
+router.post('/images/process', uploadFields, processImages)
 
 module.exports = router
