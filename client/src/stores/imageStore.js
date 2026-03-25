@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { processImages as apiProcessImages, getHistory, deleteHistory } from '../services/api'
+import { processImages as apiProcessImages} from '../services/api'
 
 export const useImageStore = defineStore('image', () => {
   const selectedFiles      = ref([])
