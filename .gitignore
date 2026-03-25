@@ -1,5 +1,4 @@
 # Environment variables
-.env
 .env.local
 .env.*.local
 
@@ -27,7 +26,5 @@ build/
 # OS
 .DS_Store
 Thumbs.db
-
-server/public/uploads/
 
 *.sql
