@@ -64,7 +64,7 @@ const processImages = async (req, res) => {
 
     if (processedPaths.length === 1) {
       const { outputPath, downloadName } = processedPaths[0]
-      res.download(outputPath, downloadName, (err) => {    // ✅ tên gốc khi tải về
+      res.download(outputPath, downloadName, (err) => {    // tên gốc khi tải về
         cleanupFiles([...inputPaths, ...wmPaths, outputPath])
         if (err) console.error('Image download error:', err)
       })
@@ -73,7 +73,7 @@ const processImages = async (req, res) => {
       await createZip(
         processedPaths.map(p => p.outputPath),
         zipPath,
-        processedPaths.map(p => p.downloadName),  // ✅ tên trong ZIP = tên gốc
+        processedPaths.map(p => p.downloadName),  // tên trong ZIP = tên gốc
       )
       res.download(zipPath, 'watermarked-images.zip', (err) => {
         cleanupFiles([...inputPaths, ...wmPaths, ...processedPaths.map(p => p.outputPath), zipPath])

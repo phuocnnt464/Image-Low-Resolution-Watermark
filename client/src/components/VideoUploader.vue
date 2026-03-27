@@ -177,7 +177,7 @@ function onSelectPreset(value) {
   store.videoBitrate  = 'auto'
 }
 
-// ── Các hàm tiện ích ──────────────────────────────────────────────────────────
+// ── Utils Function ──────────────────────────────────────────────────────────
 const formatSize = (bytes) => {
   if (!bytes) return '—'
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`

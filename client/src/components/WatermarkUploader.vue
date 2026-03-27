@@ -184,7 +184,7 @@ const currentPositionLabel = computed(() => {
   return found ? found.label : ''
 })
 
-// ─── Xử lý upload logo ────────────────────────────────────────────────────────
+// ─── upload logo 
 function onFileChange(event) {
   const file = event.target.files?.[0]
   if (file) store.setWatermark(file)
@@ -197,7 +197,7 @@ function onDrop(event) {
   if (file) store.setWatermark(file)
 }
 
-// ─── Hàm tiện ích ─────────────────────────────────────────────────────────────
+// ─── Utils Function ───────────────────────────────────
 
 // Chuyển giây sang chuỗi "m:ss" 
 function formatTime(seconds) {
@@ -279,7 +279,7 @@ async function drawToCanvas(source, sourceWidth, sourceHeight) {
   const ctx = canvas.getContext('2d')
   ctx.drawImage(source, 0, 0, displayW, displayH)
 
-  // Vẽ logo
+  // Draw logo
   const logoImage = await loadWatermarkImage()
   if (!logoImage) return
 
@@ -292,7 +292,7 @@ async function drawToCanvas(source, sourceWidth, sourceHeight) {
   ctx.drawImage(logoImage, x, y, logoW, logoH)
 }
 
-// ─── Image preview ────────────────────────────────────────────────────────────
+// ─── Image preview 
 async function drawImagePreview() {
   await nextTick()
 
@@ -305,7 +305,7 @@ async function drawImagePreview() {
   img.src         = url
 }
 
-// ─── Video preview — RAF loop ─────────────────────────────────────────────
+// ─── Video preview — RAF loop 
 function stopRafLoop() {
   if (rafId !== null) {
     cancelAnimationFrame(rafId)

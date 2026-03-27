@@ -8,7 +8,7 @@ export const useVideoStore = defineStore('video', () => {
   const isProcessing      = ref(false)
   const errorMessage      = ref('')
   const bitratePreset     = ref('720p')
-  const videoBitrate      = ref('auto')    // ← thêm mới
+  const videoBitrate      = ref('auto')    
   const watermarkFile     = ref(null)
   const watermarkUrl      = ref('')
   const watermarkPosition = ref('bottom-left')

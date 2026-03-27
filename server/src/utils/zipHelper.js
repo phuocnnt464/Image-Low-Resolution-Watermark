@@ -19,7 +19,7 @@ const createZip = (filePaths, outputPath, entryNames = []) => {
 
     archive.pipe(output)
     filePaths.forEach((fp, i) => {
-      const name = entryNames[i] || path.basename(fp)  // ✅ dùng tên gốc nếu có
+      const name = entryNames[i] || path.basename(fp)  // dùng tên gốc nếu có
       archive.file(fp, { name })
     })
     archive.finalize()
