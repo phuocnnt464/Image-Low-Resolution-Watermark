@@ -11,11 +11,11 @@ export default defineConfig({
     ],
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://server:3000',
         changeOrigin: true,
       },
       '/assets': {
-        target: 'http://localhost:3000',
+        target: 'http://server:3000',
         changeOrigin: true,
       },
     },
