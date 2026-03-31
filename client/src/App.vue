@@ -57,7 +57,7 @@ const imageStore       = useImageStore()
 const videoStore       = useVideoStore()
 const videoUploaderRef = ref(null)   
 
-onMounted(() => imageStore.fetchHistory())
+// onMounted(() => imageStore.fetchHistory())
 </script>
 
 <style>

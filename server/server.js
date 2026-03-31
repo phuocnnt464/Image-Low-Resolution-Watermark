@@ -2,6 +2,7 @@ require('dotenv').config();
 const express    = require('express');
 const cors       = require('cors');
 const path       = require('path');
+const fs         = require('fs');
 const bodyParser = require('body-parser');
 const imageRoutes = require('./src/routes/imageRoutes');
 const videoRoutes = require('./src/routes/videoRoutes');
@@ -18,6 +19,22 @@ app.use('/assets', express.static(path.resolve(__dirname, 'assets')));
 // Routes
 app.use('/api/images', imageRoutes);
 app.use('/api/videos', videoRoutes);
+
+app.get('/health', (req, res) => {
+  const watermarkPath = process.env.WATERMARK_PATH
+    || path.resolve(__dirname, 'assets/watermark.png')
+
+  res.json({
+    status:    'ok',
+    uptime:    Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+    checks: {
+      server:    true,
+      watermark: fs.existsSync(watermarkPath),
+      uploadDir: fs.existsSync(process.env.UPLOAD_DIR || path.resolve(__dirname, 'public/uploads')),
+    },
+  })
+})
 
 // 404 handler
 app.use((req, res) => {

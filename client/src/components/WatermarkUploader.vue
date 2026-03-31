@@ -235,7 +235,7 @@ function getLogoXY(position, canvasW, canvasH, logoW, logoH, padding) {
 
 function loadWatermarkImage() {
   return new Promise((resolve) => {
-    const src = store.watermarkUrl || '/assets/watermark.png'
+    const src = store.watermarkUrl || '/watermark.png'
 
     if (cachedWmSrc === src && cachedWmImage) {
       return resolve(cachedWmImage)

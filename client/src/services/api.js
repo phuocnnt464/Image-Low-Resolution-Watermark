@@ -17,6 +17,10 @@ const processImages = async (files, resolutionPreset = 'FHD', watermarkFile = nu
   formData.append('resolutionPreset', resolutionPreset)
   formData.append('watermarkPosition', watermarkPosition)
 
+  console.log('API - processImages called with:', 
+    formData.getAll('images'),
+  )
+
   if (watermarkFile) {
     formData.append('watermark', watermarkFile)
   }
@@ -28,14 +32,15 @@ const processImages = async (files, resolutionPreset = 'FHD', watermarkFile = nu
   return response
 }
 
-const getHistory = async (limit = 50) => {
-  const response = await apiClient.get(`/images/history?limit=${limit}`)
-  return response.data.data
-}
+// const getHistory = async (limit = 50) => {
+//   const response = await apiClient.get(`/images/history?limit=${limit}`)
+//   return response.data.data
+// }
 
-const deleteHistory = async (id) => {
-  const response = await apiClient.delete(`/images/history/${id}`)
-  return response.data
-}
+// const deleteHistory = async (id) => {
+//   const response = await apiClient.delete(`/images/history/${id}`)
+//   return response.data
+// }
 
-export { processImages, getHistory, deleteHistory }
+// export { processImages, getHistory, deleteHistory }
+export { processImages }
