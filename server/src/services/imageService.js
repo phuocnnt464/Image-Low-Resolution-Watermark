@@ -6,14 +6,14 @@ require('dotenv').config();
 const DEFAULT_WATERMARK_PATH = process.env.WATERMARK_PATH
   || path.join(__dirname, '../../assets/watermark.png');
 
-const WATERMARK_RATIO = 0.20;
-const PADDING         = 15;
+const WATERMARK_RATIO = 0.22;  // 22% cạnh lớn nhất
+const PADDING_RATIO   = 0.02;  // 2% padding động cạnh lớn nhất
 
 /**
  *   targetWidth : resize ảnh về đúng width này (withoutEnlargement: true)
  *                 null = giữ nguyên kích thước gốc (Original)
  *   jpegQuality : quality JPEG/WebP output — giữ 100 để không mất thêm, hoặc giảm nhẹ
- * 
+ *
  * Output CÓ kích thước nhỏ hơn thật sự
  * → file nhỏ hơn, resolution thấp hơn, rõ ràng khi xem thuộc tính ảnh.
  *
@@ -78,24 +78,25 @@ const processImage = async (
   if (targetWidth !== null) {
     pipeline = pipeline.resize({
       width: targetWidth,
-      withoutEnlargement: true,   // nếu ảnh gốc nhỏ hơn targetWidth → giữ nguyên
+      withoutEnlargement: true,
       kernel: sharp.kernel.lanczos3,
     });
   }
-  // targetWidth === null (Original) → không resize, giữ kích thước gốc
 
   // ── Bước 2: Lấy metadata sau resize để tính vị trí watermark ──────────────
-  // Cần biết kích thước thực tế sau resize để đặt watermark đúng chỗ
   const resizedBuffer = await pipeline.toBuffer({ resolveWithObject: true });
   const resW = resizedBuffer.info.width;
   const resH = resizedBuffer.info.height;
 
-  // ── Bước 3: Watermark (scale theo kích thước sau resize) ───────────────────
+  // ── Bước 3: Watermark (scale theo cạnh lớn nhất sau resize) ───────────────
   let compositeOptions = [];
 
   if (fs.existsSync(wmPath)) {
-    const wmMeta  = await sharp(wmPath).metadata();
-    const wmMaxW  = Math.round(resW * WATERMARK_RATIO);
+    const wmMeta = await sharp(wmPath).metadata();
+
+    // Dùng cạnh lớn nhất — logo đúng kích thước cho cả ảnh ngang lẫn dọc
+    const maxDim  = Math.max(resW, resH);
+    const wmMaxW  = Math.round(maxDim * WATERMARK_RATIO);
     const wmScale = Math.min(1, wmMaxW / wmMeta.width);
     const wmW     = Math.max(1, Math.round(wmMeta.width  * wmScale));
     const wmH     = Math.max(1, Math.round(wmMeta.height * wmScale));
@@ -104,21 +105,23 @@ const processImage = async (
       .resize(wmW, wmH, { kernel: sharp.kernel.lanczos3 })
       .toBuffer();
 
-    const { left, top } = calcPosition(watermarkPosition, resW, resH, wmW, wmH, PADDING);
+    // Padding động theo cạnh lớn nhất
+    const dynamicPadding = Math.round(maxDim * PADDING_RATIO);
+    const { left, top }  = calcPosition(watermarkPosition, resW, resH, wmW, wmH, dynamicPadding);
     compositeOptions = [{ input: watermarkBuffer, left, top }];
   } else {
     console.warn(`Watermark không tìm thấy: ${wmPath}`);
   }
 
-  // ── Bước 4: Composite + encode output với quality 100% ─────────────────────
+  // ── Bước 4: Composite + encode output ─────────────────────────────────────
   let outputPipeline = sharp(resizedBuffer.data)
     .composite(compositeOptions)
-    .withMetadata();   
+    .withMetadata();
 
   switch (format) {
     case 'jpeg':
       outputPipeline = outputPipeline.jpeg({
-        quality: jpegQuality,      
+        quality: jpegQuality,
         progressive: true,
         mozjpeg: true,
       });
@@ -127,14 +130,13 @@ const processImage = async (
     case 'png':
       outputPipeline = outputPipeline.png({
         compressionLevel: pngCompression,
-        // Không dùng palette — giữ full bit depth (không giảm màu)
         palette: false,
       });
       break;
 
     case 'webp':
       outputPipeline = outputPipeline.webp({
-        quality: webpQuality,       // 100 = lossless-like
+        quality: webpQuality,
         lossless: jpegQuality === 100,
       });
       break;

@@ -26,8 +26,6 @@ const PRESETS = {
   '240p':     { crf: 28, scale: 426  },
 }
 
-// Các mức bitrate video có thể chọn theo từng preset (Kbps)
-// 'auto' = dùng CRF (không set -b:v)
 const BITRATE_OPTIONS = {
   'Original': ['auto'],
   '4K':       ['auto', '40000k', '20000k', '10000k'],
@@ -38,7 +36,6 @@ const BITRATE_OPTIONS = {
   '240p':     ['auto', '700k',   '500k',   '300k'  ],
 }
 
-// Audio bitrate theo preset
 const AUDIO_BITRATE = {
   'Original': '192k',
   '4K':       '192k',
@@ -49,17 +46,17 @@ const AUDIO_BITRATE = {
   '240p':     '48k',
 }
 
-// Vị trí overlay watermark trong FFmpeg expression
+// Padding động: 2% cạnh lớn nhất — dùng FFmpeg expression if(gt(W,H),W,H)*0.02
 const OVERLAY_POSITIONS = {
-  'top-left':      'x=15:y=15',
-  'top-center':    'x=(W-w)/2:y=15',
-  'top-right':     'x=W-w-15:y=15',
-  'center-left':   'x=15:y=(H-h)/2',
+  'top-left':      'x=if(gt(W\\,H)\\,W\\,H)*0.02:y=if(gt(W\\,H)\\,W\\,H)*0.02',
+  'top-center':    'x=(W-w)/2:y=if(gt(W\\,H)\\,W\\,H)*0.02',
+  'top-right':     'x=W-w-if(gt(W\\,H)\\,W\\,H)*0.02:y=if(gt(W\\,H)\\,W\\,H)*0.02',
+  'center-left':   'x=if(gt(W\\,H)\\,W\\,H)*0.02:y=(H-h)/2',
   'center':        'x=(W-w)/2:y=(H-h)/2',
-  'center-right':  'x=W-w-15:y=(H-h)/2',
-  'bottom-left':   'x=15:y=H-h-15',
-  'bottom-center': 'x=(W-w)/2:y=H-h-15',
-  'bottom-right':  'x=W-w-15:y=H-h-15',
+  'center-right':  'x=W-w-if(gt(W\\,H)\\,W\\,H)*0.02:y=(H-h)/2',
+  'bottom-left':   'x=if(gt(W\\,H)\\,W\\,H)*0.02:y=H-h-if(gt(W\\,H)\\,W\\,H)*0.02',
+  'bottom-center': 'x=(W-w)/2:y=H-h-if(gt(W\\,H)\\,W\\,H)*0.02',
+  'bottom-right':  'x=W-w-if(gt(W\\,H)\\,W\\,H)*0.02:y=H-h-if(gt(W\\,H)\\,W\\,H)*0.02',
 }
 
 // Lấy width/height video bằng ffprobe
@@ -80,7 +77,7 @@ function getVideoSize(filePath) {
  * @param {string} preset        - 'Original'|'4K'|'1080p'|'720p'|'480p'|'360p'|'240p'
  * @param {string|null} wmPath
  * @param {string} wmPosition
- * @param {string} videoBitrate  - 'auto' | '40000k' | '8000k' | ... (phải nằm trong BITRATE_OPTIONS[preset])
+ * @param {string} videoBitrate  - 'auto' | '40000k' | '8000k' | ...
  */
 const processVideo = async (
   inputPath,
@@ -98,15 +95,23 @@ const processVideo = async (
       const audioBitrate = AUDIO_BITRATE[preset] ?? '128k'
       const overlayExpr  = OVERLAY_POSITIONS[wmPosition] || OVERLAY_POSITIONS['bottom-left']
 
-      // Validate videoBitrate — chỉ cho phép các giá trị hợp lệ của preset đó
       const allowedBitrates = BITRATE_OPTIONS[preset] ?? ['auto']
       const finalBitrate    = allowedBitrates.includes(videoBitrate) ? videoBitrate : 'auto'
 
       let logoW = null
       if (hasWm) {
-        const { width: origW } = await getVideoSize(inputPath)
+        // Lấy cả width lẫn height để tính cạnh lớn nhất
+        const { width: origW, height: origH } = await getVideoSize(inputPath)
+
+        // Tính kích thước thực tế sau khi scale (giữ tỉ lệ)
         const finalVideoW = (scale !== null && origW > scale) ? scale : origW
-        logoW = Math.max(2, Math.floor(finalVideoW * 0.20 / 2) * 2)
+        const finalVideoH = (scale !== null && origW > scale)
+          ? Math.round(origH * scale / origW)
+          : origH
+
+        // Dùng cạnh lớn nhất — logo đúng kích thước cho cả video ngang lẫn dọc
+        const maxDim = Math.max(finalVideoW, finalVideoH)
+        logoW = Math.max(2, Math.floor(maxDim * 0.22 / 2) * 2)
       }
 
       const cmd     = ffmpeg(inputPath)
@@ -141,11 +146,8 @@ const processVideo = async (
       ]
 
       if (finalBitrate === 'auto') {
-        // Dùng CRF — chất lượng cố định, kích thước file phụ thuộc nội dung
         videoOptions.push(`-crf ${crf}`)
       } else {
-        // Dùng target bitrate — kích thước file có thể dự đoán được
-        // CBR-like: set -b:v và -maxrate/-bufsize để ổn định
         videoOptions.push(`-b:v ${finalBitrate}`)
         videoOptions.push(`-maxrate ${finalBitrate}`)
         videoOptions.push(`-bufsize ${parseInt(finalBitrate) * 2}k`.replace('kk', 'k'))
