@@ -146,49 +146,48 @@ const isVideo = computed(() => {
 })
 
 // ─── Reactive state ───────────────────────────────────────────────────────────
-const fileInput  = ref(null)  
-const canvasRef  = ref(null)  // ref tới <canvas> hiển thị preview
-const videoEl    = ref(null)  // ref tới <video> ẩn dùng để decode frame
-const isDragging = ref(false) 
-const imgIndex   = ref(0)    
+const fileInput  = ref(null)
+const canvasRef  = ref(null)
+const videoEl    = ref(null)
+const isDragging = ref(false)
+const imgIndex   = ref(0)
 
 // Trạng thái video player
-const videoReady  = ref(false) 
-const isPlaying   = ref(false) 
-const isMuted     = ref(false) 
-const volume      = ref(1)     
-const currentTime = ref(0)     
-const duration    = ref(0)     
+const videoReady  = ref(false)
+const isPlaying   = ref(false)
+const isMuted     = ref(false)
+const volume      = ref(1)
+const currentTime = ref(0)
+const duration    = ref(0)
 
 // Cache watermark image để RAF loop không phải load lại mỗi frame
-let rafId         = null  
-let cachedWmImage = null  
-let cachedWmSrc   = ''  
+let rafId         = null
+let cachedWmImage = null
+let cachedWmSrc   = ''
 
 // ─── Hằng số ──────────────────────────────────────────────────────────────────
 const POSITIONS = [
-  { value: 'top-left',      label: 'Trên trái',   icon: '↖' },
-  { value: 'top-center',    label: 'Trên giữa',   icon: '↑' },
-  { value: 'top-right',     label: 'Trên phải',   icon: '↗' },
-  { value: 'center-left',   label: 'Giữa trái',   icon: '←' },
-  { value: 'center',        label: 'Giữa',         icon: '⊙' },
-  { value: 'center-right',  label: 'Giữa phải',   icon: '→' },
-  { value: 'bottom-left',   label: 'Dưới trái',   icon: '↙' },
-  { value: 'bottom-center', label: 'Dưới giữa',   icon: '↓' },
-  { value: 'bottom-right',  label: 'Dưới phải',   icon: '↘' },
+  { value: 'top-left',      label: 'Trên trái',  icon: '↖' },
+  { value: 'top-center',    label: 'Trên giữa',  icon: '↑' },
+  { value: 'top-right',     label: 'Trên phải',  icon: '↗' },
+  { value: 'center-left',   label: 'Giữa trái',  icon: '←' },
+  { value: 'center',        label: 'Giữa',        icon: '⊙' },
+  { value: 'center-right',  label: 'Giữa phải',  icon: '→' },
+  { value: 'bottom-left',   label: 'Dưới trái',  icon: '↙' },
+  { value: 'bottom-center', label: 'Dưới giữa',  icon: '↓' },
+  { value: 'bottom-right',  label: 'Dưới phải',  icon: '↘' },
 ]
 
-// Label của vị trí đang chọn để hiển thị bên dưới grid
 const currentPositionLabel = computed(() => {
   const found = POSITIONS.find(p => p.value === store.watermarkPosition)
   return found ? found.label : ''
 })
 
-// ─── Xử lý upload logo ────────────────────────────────────────────────────────
+// ─── Upload logo ──────────────────────────────────────────────────────────────
 function onFileChange(event) {
   const file = event.target.files?.[0]
   if (file) store.setWatermark(file)
-  event.target.value = '' // reset để có thể chọn lại cùng file
+  event.target.value = ''
 }
 
 function onDrop(event) {
@@ -197,9 +196,7 @@ function onDrop(event) {
   if (file) store.setWatermark(file)
 }
 
-// ─── Hàm tiện ích ─────────────────────────────────────────────────────────────
-
-// Chuyển giây sang chuỗi "m:ss" 
+// ─── Utils ────────────────────────────────────────────────────────────────────
 function formatTime(seconds) {
   if (!seconds || isNaN(seconds)) return '0:00'
   const minutes = Math.floor(seconds / 60)
@@ -209,21 +206,20 @@ function formatTime(seconds) {
 
 const fmt = formatTime
 
-// Tính toạ độ (x, y) để vẽ logo tại vị trí đã chọn
 function getLogoXY(position, canvasW, canvasH, logoW, logoH, padding) {
   const centerX = Math.round((canvasW - logoW) / 2)
   const centerY = Math.round((canvasH - logoH) / 2)
 
   const positionMap = {
-    'top-left':      { x: padding,                    y: padding },
-    'top-center':    { x: centerX,                    y: padding },
-    'top-right':     { x: canvasW - logoW - padding,  y: padding },
-    'center-left':   { x: padding,                    y: centerY },
-    'center':        { x: centerX,                    y: centerY },
-    'center-right':  { x: canvasW - logoW - padding,  y: centerY },
-    'bottom-left':   { x: padding,                    y: canvasH - logoH - padding },
-    'bottom-center': { x: centerX,                    y: canvasH - logoH - padding },
-    'bottom-right':  { x: canvasW - logoW - padding,  y: canvasH - logoH - padding },
+    'top-left':      { x: padding,                   y: padding },
+    'top-center':    { x: centerX,                   y: padding },
+    'top-right':     { x: canvasW - logoW - padding, y: padding },
+    'center-left':   { x: padding,                   y: centerY },
+    'center':        { x: centerX,                   y: centerY },
+    'center-right':  { x: canvasW - logoW - padding, y: centerY },
+    'bottom-left':   { x: padding,                   y: canvasH - logoH - padding },
+    'bottom-center': { x: centerX,                   y: canvasH - logoH - padding },
+    'bottom-right':  { x: canvasW - logoW - padding, y: canvasH - logoH - padding },
   }
 
   const result = positionMap[position] || positionMap['bottom-left']
@@ -241,7 +237,7 @@ function loadWatermarkImage() {
       return resolve(cachedWmImage)
     }
 
-    const img     = new Image()
+    const img       = new Image()
     img.crossOrigin = 'anonymous'
 
     img.onload = () => {
@@ -252,16 +248,15 @@ function loadWatermarkImage() {
 
     img.onerror = () => {
       cachedWmImage = null
-      // giữ lại src đã thử thất bại để không retry vô hạn
-      cachedWmSrc   = src 
-      resolve(null) // load thất bại → không vẽ logo, không crash
+      cachedWmSrc   = src
+      resolve(null)
     }
 
     img.src = src
   })
 }
 
-// Vẽ một source (ảnh hoặc frame video) + logo lên canvas
+// Vẽ source (ảnh hoặc frame video) + logo lên canvas
 async function drawToCanvas(source, sourceWidth, sourceHeight) {
   const canvas = canvasRef.value
   if (!canvas || !sourceWidth || !sourceHeight) return
@@ -272,21 +267,20 @@ async function drawToCanvas(source, sourceWidth, sourceHeight) {
   const displayW    = Math.round(sourceWidth  * scaleFactor)
   const displayH    = Math.round(sourceHeight * scaleFactor)
 
-  // Chỉ resize canvas khi thực sự cần (tránh flicker)
   if (canvas.width  !== displayW) canvas.width  = displayW
   if (canvas.height !== displayH) canvas.height = displayH
 
   const ctx = canvas.getContext('2d')
   ctx.drawImage(source, 0, 0, displayW, displayH)
 
-  // Vẽ logo
   const logoImage = await loadWatermarkImage()
   if (!logoImage) return
 
-  // Logo = 20% chiều rộng canvas, chiều cao giữ tỉ lệ gốc
-  const logoW   = Math.round(displayW * 0.20)
+  // ✅ Dùng cạnh lớn nhất để tính kích thước logo — đúng cho cả ảnh ngang lẫn dọc
+  const maxDim  = Math.max(displayW, displayH)
+  const logoW   = Math.round(maxDim * 0.22)
   const logoH   = Math.round(logoW * logoImage.naturalHeight / logoImage.naturalWidth)
-  const padding = Math.max(8, Math.round(15 * scaleFactor))
+  const padding = Math.round(maxDim * 0.02)
 
   const { x, y } = getLogoXY(store.watermarkPosition, displayW, displayH, logoW, logoH, padding)
   ctx.drawImage(logoImage, x, y, logoW, logoH)
@@ -305,7 +299,7 @@ async function drawImagePreview() {
   img.src         = url
 }
 
-// ─── Video preview — RAF loop ─────────────────────────────────────────────
+// ─── Video preview — RAF loop ─────────────────────────────────────────────────
 function stopRafLoop() {
   if (rafId !== null) {
     cancelAnimationFrame(rafId)
@@ -316,7 +310,6 @@ function stopRafLoop() {
 function startRafLoop() {
   stopRafLoop()
 
-  // Preload watermark vào cache trước, sau đó mới bắt đầu loop
   loadWatermarkImage().then(() => {
     function tick() {
       const video  = videoEl.value
@@ -334,11 +327,12 @@ function startRafLoop() {
         const ctx = canvas.getContext('2d')
         ctx.drawImage(video, 0, 0, displayW, displayH)
 
-        // Vẽ logo từ cache (sync, không await) để đạt 60fps
+        // ✅ Dùng cạnh lớn nhất để tính kích thước logo — đúng cho cả video ngang lẫn dọc
         if (cachedWmImage) {
-          const logoW   = Math.round(displayW * 0.20)
+          const maxDim  = Math.max(displayW, displayH)
+          const logoW   = Math.round(maxDim * 0.22)
           const logoH   = Math.round(logoW * cachedWmImage.naturalHeight / cachedWmImage.naturalWidth)
-          const padding = Math.max(8, Math.round(15 * scaleFactor))
+          const padding = Math.round(maxDim * 0.02)
           const { x, y } = getLogoXY(store.watermarkPosition, displayW, displayH, logoW, logoH, padding)
           ctx.drawImage(cachedWmImage, x, y, logoW, logoH)
         }
@@ -351,7 +345,7 @@ function startRafLoop() {
   })
 }
 
-// ─── Gắn event listeners cho video element ────────────────────────────────────
+// ─── Gắn event listeners cho video element ───────────────────────────────────
 function bindVideoEvents() {
   const video = videoEl.value
   if (!video) return
@@ -367,7 +361,6 @@ function bindVideoEvents() {
   })
 }
 
-// Gọi khi video element phát sự kiện "canplay" (đã có thể phát)
 function onVideoReady() {
   const video = videoEl.value
   if (!video) return
@@ -384,11 +377,7 @@ function onVideoReady() {
 function togglePlay() {
   const video = videoEl.value
   if (!video) return
-  if (video.paused) {
-    video.play()
-  } else {
-    video.pause()
-  }
+  if (video.paused) { video.play() } else { video.pause() }
 }
 
 function toggleMute() {
@@ -411,43 +400,34 @@ function onVolume(event) {
 }
 
 // ─── Watchers ─────────────────────────────────────────────────────────────────
-
-// Ảnh: vẽ lại khi user thêm ảnh mới
 watch(() => store.previewUrls?.length, (newLength) => {
   if (!isVideo.value && newLength > 0) drawImagePreview()
 })
 
-// Cả hai: khi user đổi logo → xoá cache và load lại
 watch(() => store.watermarkUrl, () => {
   cachedWmImage = null
   cachedWmSrc   = ''
   if (!isVideo.value) {
     drawImagePreview()
   } else {
-    // Video: preload logo mới vào cache ngay để RAF loop có sẵn dùng
     loadWatermarkImage()
   }
 })
 
 watch(() => store.watermarkPosition, () => {
-  if (!isVideo.value) {
-    drawImagePreview()
-  }
+  if (!isVideo.value) drawImagePreview()
 })
 
-// Ảnh: vẽ lại khi user chuyển trang ảnh
 watch(imgIndex, () => {
   if (!isVideo.value) drawImagePreview()
 })
 
-// Ảnh: giữ imgIndex trong giới hạn khi user xoá bớt ảnh
 watch(() => store.selectedFiles?.length, (newLength) => {
   if (newLength !== undefined && imgIndex.value >= newLength) {
     imgIndex.value = Math.max(0, newLength - 1)
   }
 })
 
-// Video: reset state khi user chọn video mới
 watch(() => store.previewUrl, async () => {
   if (!isVideo.value) return
 
@@ -457,7 +437,7 @@ watch(() => store.previewUrl, async () => {
   currentTime.value = 0
   duration.value    = 0
 
-  await nextTick() 
+  await nextTick()
   bindVideoEvents()
 })
 
@@ -604,7 +584,7 @@ onUnmounted(() => stopRafLoop())
   margin: 0 0 8px;
 }
 
-/* Header của image preview (tiêu đề + navigation) */
+/* Header của image preview */
 .wm-preview-header {
   display: flex;
   align-items: center;
