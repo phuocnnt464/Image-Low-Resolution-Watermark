@@ -1,13 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-// import { processImages as apiProcessImages, getHistory, deleteHistory } from '../services/api'
 import { processImages as apiProcessImages } from '../services/api'
 
 export const useImageStore = defineStore('image', () => {
   const selectedFiles      = ref([])
   const previewUrls        = ref([])
   const isProcessing       = ref(false)
-  const history            = ref([])
   const errorMessage       = ref('')
   const resolutionPreset   = ref('FHD')   // ← thay scalePercent
 
@@ -78,7 +76,6 @@ export const useImageStore = defineStore('image', () => {
       link.click()
       URL.revokeObjectURL(url)
 
-      // await fetchHistory()
       clearFiles()
     } catch (err) {
       let message = 'Lỗi xử lý ảnh, thử lại!'
@@ -97,20 +94,8 @@ export const useImageStore = defineStore('image', () => {
     }
   }
 
-  // const fetchHistory = async () => {
-  //   try { history.value = await getHistory() }
-  //   catch (err) { console.error('Lỗi lấy lịch sử:', err) }
-  // }
-
-  // const removeHistory = async (id) => {
-  //   try {
-  //     await deleteHistory(id)
-  //     history.value = history.value.filter((item) => item.id !== id)
-  //   } catch (err) { console.error('Lỗi xóa:', err) }
-  // }
-
   return {
-    selectedFiles, previewUrls, isProcessing, history, errorMessage,
+    selectedFiles, previewUrls, isProcessing, errorMessage,
     resolutionPreset,                           
     watermarkFile, watermarkUrl, watermarkPosition,
     setWatermark, clearWatermark,
