@@ -72,14 +72,19 @@ const OVERLAY_POSITIONS = {
   'bottom-right':  'x=W-w-if(gt(W\\,H)\\,W\\,H)*0.02:y=H-h-if(gt(W\\,H)\\,W\\,H)*0.02',
 }
 
-// Lấy width/height video bằng ffprobe
-function getVideoSize(filePath) {
+// ✅ Đổi tên + lấy thêm duration và sourceBitrate
+function getVideoInfo(filePath) {
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(filePath, (err, metadata) => {
       if (err) return reject(err)
       const stream = metadata.streams.find(s => s.codec_type === 'video')
       if (!stream) return reject(new Error('Không tìm thấy video stream'))
-      resolve({ width: stream.width, height: stream.height })
+      resolve({
+        width:         stream.width,
+        height:        stream.height,
+        duration:      parseFloat(metadata.format.duration) || 0,
+        sourceBitrate: parseInt(stream.bit_rate || metadata.format.bit_rate || 0),
+      })
     })
   })
 }
@@ -109,11 +114,25 @@ const processVideo = async (
       const overlayExpr    = OVERLAY_POSITIONS[wmPosition] || OVERLAY_POSITIONS['bottom-left']
 
       const allowedBitrates = BITRATE_OPTIONS[preset] ?? ['auto']
-      const finalBitrate    = allowedBitrates.includes(videoBitrate) ? videoBitrate : 'auto'
+      const rawBitrate      = allowedBitrates.includes(videoBitrate) ? videoBitrate : 'auto'
+
+      // ✅ Lấy thêm duration và sourceBitrate (dùng chung cho logoW + cap bitrate)
+      const { width: origW, height: origH, sourceBitrate } = await getVideoInfo(inputPath)
+
+      // ✅ Cap bitrate — không cho output vượt bitrate gốc, tránh inflate file
+      // Ví dụ: chọn 40000k nhưng gốc chỉ 5000k → cap về 5000k
+      let finalBitrate = rawBitrate
+      if (rawBitrate !== 'auto' && sourceBitrate > 0) {
+        const requestedBps = parseInt(rawBitrate) * 1000
+        if (requestedBps > sourceBitrate) {
+          const cappedKbps = Math.floor(sourceBitrate / 1000 / 100) * 100
+          finalBitrate     = `${cappedKbps}k`
+          console.log(`[bitrate cap] ${rawBitrate} > source ${Math.round(sourceBitrate/1000)}k → capped to ${finalBitrate}`)
+        }
+      }
 
       let logoW = null
       if (hasWm) {
-        const { width: origW, height: origH } = await getVideoSize(inputPath)
         const finalVideoW = (scale !== null && origW > scale) ? scale : origW
         const finalVideoH = (scale !== null && origW > scale)
           ? Math.round(origH * scale / origW)
@@ -144,22 +163,6 @@ const processVideo = async (
       cmd.complexFilter(filters, 'out')
 
       // Bước 3: Video codec
-      // ─────────────────────────────────────────────────────────────────────
-      // preset veryfast : encode nhanh (chỉ chậm hơn ultrafast ~15-20%)
-      //                   nhưng nén tốt hơn ultrafast ~25-30% ← key change
-      //
-      // CRF cao hơn     : đây là nguồn nén chính, độc lập với preset
-      //                   CRF 26-28 cho 720p/1080p là mức "social media" quality
-      //                   đủ tốt để xem trên điện thoại/web
-      //
-      // Bỏ tune fastdecode: tune này làm file TO hơn để decode nhanh hơn
-      //                     không cần cho use case watermark
-      //
-      // profile main    : thay vì high — tương thích rộng hơn (iOS, Android cũ)
-      //                   không ảnh hưởng nén đáng kể
-      //
-      // level 4.0       : tương thích tốt với mọi thiết bị
-      // ─────────────────────────────────────────────────────────────────────
       const videoOptions = [
         '-c:v libx264',
         '-preset veryfast',
@@ -171,9 +174,12 @@ const processVideo = async (
       ]
 
       if (finalBitrate === 'auto') {
+        // CRF mode — bitrate tự động theo nội dung
         videoOptions.push(`-crf ${crf}`)
       } else {
-        videoOptions.push(`-b:v ${finalBitrate}`)
+        // ✅ VBR có trần: CRF giữ chất lượng, maxrate giới hạn trên
+        // KHÔNG dùng -b:v CBR vì sẽ inflate file nếu target > bitrate gốc
+        videoOptions.push(`-crf ${crf}`)
         videoOptions.push(`-maxrate ${finalBitrate}`)
         videoOptions.push(`-bufsize ${parseInt(finalBitrate) * 2}k`.replace('kk', 'k'))
       }
@@ -189,7 +195,7 @@ const processVideo = async (
       ])
 
       console.log(
-        `[FFmpeg] preset=${preset} | encode=veryfast | crf/bitrate=${finalBitrate === 'auto' ? crf : finalBitrate} | ` +
+        `[FFmpeg] preset=${preset} | encode=veryfast | crf=${crf} | bitrate=${finalBitrate} | ` +
         `scale=${scale ?? 'original'} | audio=${audioBitrate}`
       )
 
