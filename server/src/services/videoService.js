@@ -12,31 +12,18 @@ const DEFAULT_WATERMARK = process.env.WATERMARK_PATH
   || path.resolve(__dirname, '../../assets/watermark.png')
 
 /**
- * Chiến lược: veryfast + CRF cao = encode nhanh + file nhỏ
- *
- * CRF (Constant Rate Factor):
- *   0  = lossless (to nhất)
- *   18 = gần lossless, chất lượng rất cao
- *   23 = default libx264
- *   28 = chấp nhận được, file nhỏ rõ
- *   32 = chất lượng thấp, file rất nhỏ
- *   51 = tệ nhất
- *
- * Mỗi +6 CRF ≈ file nhỏ hơn ~50%
- * Mỗi +3 CRF ≈ file nhỏ hơn ~25-30%
- *
- * preset veryfast vs ultrafast:
- *   - ultrafast: encode cực nhanh, nén kém nhất → file TO
- *   - veryfast : chậm hơn ~15-20%, nhưng nén tốt hơn ~25-30% → ✅ sweet spot
+ * scale   : giới hạn chiều rộng tối đa (null = giữ nguyên)
+ * crf     : dùng khi videoBitrate = 'auto' — chất lượng cố định
+ * Khi videoBitrate là chuỗi số (vd '8000k') → dùng -b:v thay CRF
  */
 const PRESETS = {
-  'Original': { crf: 23, scale: null },  // nén vừa, giữ resolution gốc
-  '4K':       { crf: 24, scale: 3840 },  // 4K — file nhỏ hơn ~40% so với cũ
-  '1080p':    { crf: 26, scale: 1920 },  // FHD — file nhỏ hơn ~50% so với cũ
-  '720p':     { crf: 28, scale: 1280 },  // HD  — file nhỏ hơn ~55% so với cũ
-  '480p':     { crf: 30, scale: 854  },  // SD  — file nhỏ hơn ~60% so với cũ
-  '360p':     { crf: 32, scale: 640  },  // Low — file rất nhỏ
-  '240p':     { crf: 34, scale: 426  },  // Tiny— file cực nhỏ
+  'Original': { crf: 18, scale: null },
+  '4K':       { crf: 18, scale: 3840 },
+  '1080p':    { crf: 20, scale: 1920 },
+  '720p':     { crf: 22, scale: 1280 },
+  '480p':     { crf: 24, scale: 854  },
+  '360p':     { crf: 26, scale: 640  },
+  '240p':     { crf: 28, scale: 426  },
 }
 
 const BITRATE_OPTIONS = {
@@ -50,16 +37,16 @@ const BITRATE_OPTIONS = {
 }
 
 const AUDIO_BITRATE = {
-  'Original': '128k',  // hạ từ 192k → 128k: tai người không phân biệt được ở web
-  '4K':       '128k',
-  '1080p':    '128k',
-  '720p':     '96k',
-  '480p':     '80k',
+  'Original': '192k',
+  '4K':       '192k',
+  '1080p':    '192k',
+  '720p':     '128k',
+  '480p':     '96k',
   '360p':     '64k',
   '240p':     '48k',
 }
 
-// Padding động: 2% cạnh lớn nhất — dùng FFmpeg expression if(gt(W,H),W,H)*0.02
+// ✅ Padding động: 2% cạnh lớn nhất — dùng FFmpeg expression if(gt(W,H),W,H)*0.02
 const OVERLAY_POSITIONS = {
   'top-left':      'x=if(gt(W\\,H)\\,W\\,H)*0.02:y=if(gt(W\\,H)\\,W\\,H)*0.02',
   'top-center':    'x=(W-w)/2:y=if(gt(W\\,H)\\,W\\,H)*0.02',
@@ -72,19 +59,14 @@ const OVERLAY_POSITIONS = {
   'bottom-right':  'x=W-w-if(gt(W\\,H)\\,W\\,H)*0.02:y=H-h-if(gt(W\\,H)\\,W\\,H)*0.02',
 }
 
-// ✅ Đổi tên + lấy thêm duration và sourceBitrate
-function getVideoInfo(filePath) {
+// Lấy width/height video bằng ffprobe
+function getVideoSize(filePath) {
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(filePath, (err, metadata) => {
       if (err) return reject(err)
       const stream = metadata.streams.find(s => s.codec_type === 'video')
       if (!stream) return reject(new Error('Không tìm thấy video stream'))
-      resolve({
-        width:         stream.width,
-        height:        stream.height,
-        duration:      parseFloat(metadata.format.duration) || 0,
-        sourceBitrate: parseInt(stream.bit_rate || metadata.format.bit_rate || 0),
-      })
+      resolve({ width: stream.width, height: stream.height })
     })
   })
 }
@@ -107,36 +89,27 @@ const processVideo = async (
 ) => {
   return new Promise(async (resolve, reject) => {
     try {
-      const wm             = wmPath || DEFAULT_WATERMARK
-      const hasWm          = fs.existsSync(wm)
+      const wm           = wmPath || DEFAULT_WATERMARK
+      const hasWm        = fs.existsSync(wm)
       const { crf, scale } = PRESETS[preset] ?? PRESETS['720p']
-      const audioBitrate   = AUDIO_BITRATE[preset] ?? '96k'
-      const overlayExpr    = OVERLAY_POSITIONS[wmPosition] || OVERLAY_POSITIONS['bottom-left']
+      const audioBitrate = AUDIO_BITRATE[preset] ?? '128k'
+      const overlayExpr  = OVERLAY_POSITIONS[wmPosition] || OVERLAY_POSITIONS['bottom-left']
 
       const allowedBitrates = BITRATE_OPTIONS[preset] ?? ['auto']
-      const rawBitrate      = allowedBitrates.includes(videoBitrate) ? videoBitrate : 'auto'
-
-      // ✅ Lấy thêm duration và sourceBitrate (dùng chung cho logoW + cap bitrate)
-      const { width: origW, height: origH, sourceBitrate } = await getVideoInfo(inputPath)
-
-      // ✅ Cap bitrate — không cho output vượt bitrate gốc, tránh inflate file
-      // Ví dụ: chọn 40000k nhưng gốc chỉ 5000k → cap về 5000k
-      let finalBitrate = rawBitrate
-      if (rawBitrate !== 'auto' && sourceBitrate > 0) {
-        const requestedBps = parseInt(rawBitrate) * 1000
-        if (requestedBps > sourceBitrate) {
-          const cappedKbps = Math.floor(sourceBitrate / 1000 / 100) * 100
-          finalBitrate     = `${cappedKbps}k`
-          console.log(`[bitrate cap] ${rawBitrate} > source ${Math.round(sourceBitrate/1000)}k → capped to ${finalBitrate}`)
-        }
-      }
+      const finalBitrate    = allowedBitrates.includes(videoBitrate) ? videoBitrate : 'auto'
 
       let logoW = null
       if (hasWm) {
+        // ✅ Lấy cả width lẫn height để tính cạnh lớn nhất
+        const { width: origW, height: origH } = await getVideoSize(inputPath)
+
+        // Tính kích thước thực tế sau khi scale (giữ tỉ lệ)
         const finalVideoW = (scale !== null && origW > scale) ? scale : origW
         const finalVideoH = (scale !== null && origW > scale)
           ? Math.round(origH * scale / origW)
           : origH
+
+        // ✅ Dùng cạnh lớn nhất — logo đúng kích thước cho cả video ngang lẫn dọc
         const maxDim = Math.max(finalVideoW, finalVideoH)
         logoW = Math.max(2, Math.floor(maxDim * 0.22 / 2) * 2)
       }
@@ -165,37 +138,29 @@ const processVideo = async (
       // Bước 3: Video codec
       const videoOptions = [
         '-c:v libx264',
-        '-preset veryfast',
-        '-profile:v main',
-        '-level:v 4.0',
+        '-preset ultrafast',
+        '-tune fastdecode',
         '-pix_fmt yuv420p',
         '-movflags +faststart',
         '-threads 0',
       ]
 
       if (finalBitrate === 'auto') {
-        // CRF mode — bitrate tự động theo nội dung
         videoOptions.push(`-crf ${crf}`)
       } else {
-        // ✅ VBR có trần: CRF giữ chất lượng, maxrate giới hạn trên
-        // KHÔNG dùng -b:v CBR vì sẽ inflate file nếu target > bitrate gốc
-        videoOptions.push(`-crf ${crf}`)
+        videoOptions.push(`-b:v ${finalBitrate}`)
         videoOptions.push(`-maxrate ${finalBitrate}`)
         videoOptions.push(`-bufsize ${parseInt(finalBitrate) * 2}k`.replace('kk', 'k'))
       }
 
       cmd.outputOptions(videoOptions)
 
-      // Bước 4: Audio — AAC, stereo mix down nếu > 2ch để tránh lỗi surround
-      cmd.outputOptions([
-        '-map 0:a?',
-        '-c:a aac',
-        `-b:a ${audioBitrate}`,
-        '-ac 2',   // downmix về stereo — tránh lỗi 5.1 surround trên web
-      ])
+      // Bước 4: Audio
+      cmd.outputOptions(['-map 0:a?', '-c:a aac', `-b:a ${audioBitrate}`])
 
       console.log(
-        `[FFmpeg] preset=${preset} | encode=veryfast | crf=${crf} | bitrate=${finalBitrate} | ` +
+        `[FFmpeg] preset=${preset} | bitrate=${finalBitrate} | ` +
+        `crf=${finalBitrate === 'auto' ? crf : 'n/a'} | ` +
         `scale=${scale ?? 'original'} | audio=${audioBitrate}`
       )
 
