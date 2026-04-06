@@ -278,7 +278,7 @@ async function drawToCanvas(source, sourceWidth, sourceHeight) {
 
   // Dùng cạnh lớn nhất để tính kích thước logo — đúng cho cả ảnh ngang lẫn dọc
   const maxDim  = Math.max(displayW, displayH)
-  const logoW   = Math.round(maxDim * 0.22)
+  const logoW   = Math.round(maxDim * 0.20)
   const logoH   = Math.round(logoW * logoImage.naturalHeight / logoImage.naturalWidth)
   const padding = Math.round(maxDim * 0.02)
 
@@ -330,7 +330,7 @@ function startRafLoop() {
         // Dùng cạnh lớn nhất để tính kích thước logo — đúng cho cả video ngang lẫn dọc
         if (cachedWmImage) {
           const maxDim  = Math.max(displayW, displayH)
-          const logoW   = Math.round(maxDim * 0.22)
+          const logoW   = Math.round(maxDim * 0.20)
           const logoH   = Math.round(logoW * cachedWmImage.naturalHeight / cachedWmImage.naturalWidth)
           const padding = Math.round(maxDim * 0.02)
           const { x, y } = getLogoXY(store.watermarkPosition, displayW, displayH, logoW, logoH, padding)
