@@ -6,7 +6,6 @@ require('dotenv').config()
 const uploadDir = process.env.UPLOAD_DIR || './public/uploads'
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true })
 
-// ── Storage dùng chung cho cả image lẫn video ──────────────────────────────
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename:    (req, file, cb) => {
@@ -15,7 +14,6 @@ const storage = multer.diskStorage({
   },
 })
 
-// ── File filter: chỉ ảnh ───────────────────────────────────────────────────
 const imageFilter = (req, file, cb) => {
   const allowed = /jpeg|jpg|png|webp/
   const ext  = allowed.test(path.extname(file.originalname).toLowerCase())
@@ -24,7 +22,6 @@ const imageFilter = (req, file, cb) => {
   cb(new Error('Chỉ hỗ trợ file ảnh: JPEG, PNG, WEBP'))
 }
 
-// ── File filter: video + watermark ────────────────────────────────────────
 const videoFilter = (req, file, cb) => {
   if (file.fieldname === 'watermark') {
     const allowed = /jpeg|jpg|png|webp/
@@ -36,24 +33,25 @@ const videoFilter = (req, file, cb) => {
   cb(new Error('Video không hỗ trợ. Chỉ chấp nhận: MP4, MOV, AVI, MKV, WEBM, FLV, WMV'))
 }
 
-// ── Multer: ảnh (20 ảnh + 1 watermark) ────────────────────────────────────
+// ── Multer: ảnh ───────────────────────────────────────────────────────────────
 const uploadImage = multer({
   storage,
   fileFilter: imageFilter,
-  limits: {
-    fileSize: parseInt(process.env.MAX_FILE_SIZE  || 50)   * 1024 * 1024,
-    files: 21,
-  },
+  limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE || 50) * 1024 * 1024, files: 21 },
 })
 
-// ── Multer: video (1 video + 1 watermark) ─────────────────────────────
+// ── Multer: video thường (route cũ, giữ lại) ──────────────────────────────────
 const uploadVideo = multer({
   storage,
   fileFilter: videoFilter,
-  limits: {
-    fileSize: parseInt(process.env.MAX_VIDEO_SIZE || 2048) * 1024 * 1024,
-    files: 2,
-  },
+  limits: { fileSize: parseInt(process.env.MAX_VIDEO_SIZE || 2048) * 1024 * 1024, files: 2 },
+})
+
+// ── Multer: chunk — mỗi request tối đa 95MB (chunk + watermark) ───────────────
+// Không dùng videoFilter vì blob chunk không có extension rõ ràng
+const uploadChunk = multer({
+  storage,
+  limits: { fileSize: 95 * 1024 * 1024, files: 2 },
 })
 
 const uploadFields = uploadImage.fields([
@@ -62,8 +60,14 @@ const uploadFields = uploadImage.fields([
 ])
 
 const uploadVideoFields = uploadVideo.fields([
-  { name: 'video',     maxCount: 1 }, 
-  { name: 'watermark', maxCount: 1  },
+  { name: 'video',     maxCount: 1 },
+  { name: 'watermark', maxCount: 1 },
 ])
 
-module.exports = { uploadFields, uploadVideoFields }
+// ✅ Mới: nhận chunk + watermark (watermark chỉ gửi 1 lần ở chunk đầu)
+const uploadChunkFields = uploadChunk.fields([
+  { name: 'chunk',     maxCount: 1 },
+  { name: 'watermark', maxCount: 1 },
+])
+
+module.exports = { uploadFields, uploadVideoFields, uploadChunkFields }

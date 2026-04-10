@@ -111,7 +111,7 @@ const processVideo = async (
 
         // Dùng cạnh lớn nhất — logo đúng kích thước cho cả video ngang lẫn dọc
         const maxDim = Math.max(finalVideoW, finalVideoH)
-        logoW = Math.max(2, Math.floor(maxDim * 0.2 / 2) * 2)
+        logoW = Math.max(2, Math.floor(maxDim * 0.20 / 2) * 2)
       }
 
       const cmd     = ffmpeg(inputPath)
