@@ -93,6 +93,12 @@
         </div>
       </div>
 
+      <div v-if="store.isProcessing" class="progress-wrap">
+        <div class="progress-track">
+          <div class="progress-fill" :style="{ width: store.uploadProgress + '%' }"></div>
+        </div>
+        <p class="progress-text">{{ store.progressLabel }}</p>
+      </div>
     </div>
   </div>
 </template>
@@ -328,4 +334,9 @@ const onDrop = (e) => {
 }
 .br-btn--active .br-btn__label { color: white; }
 .br-btn--active .br-btn__hint  { color: #bae6fd; }
+
+.progress-wrap   { margin-top: 8px; }
+.progress-track  { height: 6px; background: #e2e8f0; border-radius: 99px; overflow: hidden; }
+.progress-fill   { height: 100%; background: #3b82f6; border-radius: 99px; transition: width 0.4s ease; }
+.progress-text   { font-size: 12px; color: #64748b; text-align: center; margin: 6px 0 0; }
 </style>
